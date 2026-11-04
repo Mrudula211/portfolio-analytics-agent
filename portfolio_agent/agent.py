@@ -1,0 +1,310 @@
+"""The agent: route a question through the cheapest path that can answer it correctly.
+
+    cache hit          exact repeat                      no model, no database
+    fast path          "sector exposure of <one fund>"   no model
+    model plan         everything else                   one call; a second only to repair SQL
+"""
+
+from __future__ import annotations
+
+import copy
+import hashlib
+import logging
+import re
+import time
+import uuid
+from dataclasses import asdict, dataclass, field
+
+from .cache import AnswerCache, normalize_question
+from .config import Settings
+from .db import ensure_database
+from .llm import GeminiClient, LLMClient, LLMError, LLMResponse, ToolCall
+from .metadata import EntityLinker, Links, SchemaCatalog
+from .prompts import build_repair_prompt, build_system_prompt, build_user_prompt
+from .render import render_exposure, render_sql
+from .sql_guard import QueryResult, SQLBlocked, SQLExecutionError
+from .tools import AmbiguousPortfolio, Tools
+
+log = logging.getLogger(__name__)
+
+_EXPOSURE_INTENT = re.compile(
+    r"\b(?:sector\s+(?:exposures?|breakdown|allocations?|weights?|weightings?|mix|split)"
+    r"|exposures?\s+(?:by|across|per)\s+sector)\b",
+    re.I,
+)
+# Words that mean the question asks for more than one fund's plain breakdown.
+_NOT_SIMPLE = re.compile(
+    r"\b(?:how many|which|compare|versus|vs|highest|lowest|largest|smallest|biggest|top|most|least|"
+    r"average|more than|less than|greater|all|each|every)\b",
+    re.I,
+)
+_MAX_FANOUT = 20
+
+STATUS_OK = "ok"
+STATUS_DECLINED = "declined"
+STATUS_CLARIFY = "clarify"
+STATUS_BLOCKED = "blocked"
+STATUS_ERROR = "error"
+STATUS_INVALID = "invalid"
+
+
+@dataclass
+class Step:
+    """One tool execution, kept for the UI, the evaluator and debugging."""
+
+    tool: str
+    input: dict
+    columns: list[str] | None = None
+    rows: list[list] | None = None
+    truncated: bool = False
+    exposure: dict | None = None
+    elapsed_ms: float = 0.0
+    vm_steps: int = 0
+    full_scans: list[str] = field(default_factory=list)
+    error: str | None = None
+
+
+@dataclass
+class AgentResponse:
+    question: str
+    status: str
+    answer: str
+    route: str
+    request_id: str = ""
+    steps: list[Step] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    timings_ms: dict[str, float] = field(default_factory=dict)
+    llm: dict = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+class _StopPlan(Exception):
+    """Ends plan execution with a final status and message."""
+
+    def __init__(self, status: str, message: str):
+        self.status = status
+        self.message = message
+        super().__init__(message)
+
+
+class PortfolioAgent:
+    def __init__(self, settings: Settings | None = None, llm: LLMClient | None = None):
+        self.settings = settings or Settings.from_env()
+        ensure_database(self.settings)
+        self.catalog = SchemaCatalog(self.settings.db_path)
+        self.linker = EntityLinker(self.catalog.portfolio_names, self.catalog.sector_names, self.catalog.securities)
+        self.tools = Tools(self.settings, self.linker)
+        self.cache = AnswerCache(self.settings.cache_size, self.settings.cache_ttl_s)
+        self._full_system = build_system_prompt(self.catalog.render())
+        self._version = hashlib.sha256(
+            f"{self._full_system}|{self.settings.gemini_model}|{self.settings.schema_mode}".encode()
+        ).hexdigest()[:12]
+        self.llm = llm if llm is not None else self._default_llm()
+
+    def _default_llm(self) -> LLMClient | None:
+        try:
+            return GeminiClient(self.settings)
+        except LLMError:
+            log.warning("llm_disabled reason=no_api_key")
+            return None
+
+    def answer_question(self, question: str, *, use_cache: bool = True) -> AgentResponse:
+        started = time.perf_counter()
+        request_id = uuid.uuid4().hex[:12]
+        question = (question or "").strip()
+        if not question or len(question) > self.settings.max_question_chars:
+            message = f"Please ask a question of 1 to {self.settings.max_question_chars} characters."
+            return AgentResponse(question, STATUS_INVALID, message, "validation", request_id)
+
+        key = f"{self._version}:{normalize_question(question)}"
+        if use_cache:
+            hit = self.cache.get(key)
+            if hit is not None:
+                reply = copy.deepcopy(hit)
+                reply.route = "cache"
+                reply.request_id = request_id
+                reply.timings_ms = {"total": round((time.perf_counter() - started) * 1000, 3)}
+                return reply
+
+        links = self.linker.link(question)
+        if self._is_simple_exposure(question, links):
+            reply = self._answer_with_calls(
+                question,
+                links,
+                LLMResponse([ToolCall("exposure_calculator", {"portfolio_names": links.portfolios})]),
+                route="fast_path",
+            )
+        else:
+            reply = self._answer_with_model(question, links)
+
+        reply.request_id = request_id
+        reply.timings_ms["total"] = round((time.perf_counter() - started) * 1000, 3)
+        if reply.status == STATUS_OK and use_cache:
+            self.cache.put(key, copy.deepcopy(reply))
+        log.info(
+            "answered id=%s route=%s status=%s total_ms=%.1f llm_calls=%s",
+            request_id,
+            reply.route,
+            reply.status,
+            reply.timings_ms["total"],
+            reply.llm.get("calls", 0),
+        )
+        return reply
+
+    @staticmethod
+    def _is_simple_exposure(question: str, links: Links) -> bool:
+        return (
+            len(links.portfolios) == 1
+            and not links.sectors
+            and bool(_EXPOSURE_INTENT.search(question))
+            and not _NOT_SIMPLE.search(question)
+        )
+
+    def _system_prompt(self, question: str) -> str:
+        if self.settings.schema_mode == "retrieved":
+            return build_system_prompt(self.catalog.render(self.catalog.retrieve_tables(question)))
+        return self._full_system
+
+    def _answer_with_model(self, question: str, links: Links) -> AgentResponse:
+        if self.llm is None:
+            return AgentResponse(
+                question,
+                STATUS_ERROR,
+                "This question needs the language model, and GEMINI_API_KEY is not set. "
+                "Sector exposure questions for a named portfolio still work without it.",
+                "model",
+            )
+        started = time.perf_counter()
+        system = self._system_prompt(question)
+        try:
+            plan = self.llm.plan(system, build_user_prompt(question, links))
+        except LLMError as exc:
+            log.warning("llm_failed reason=%s", exc)
+            return AgentResponse(
+                question,
+                STATUS_ERROR,
+                "The language model is unavailable right now. Please try again shortly.",
+                "model",
+                timings_ms={"llm": round((time.perf_counter() - started) * 1000, 3)},
+            )
+        plan.latency_ms = (time.perf_counter() - started) * 1000  # Includes retries and fallback.
+        return self._answer_with_calls(question, links, plan, route="model", system=system)
+
+    def _answer_with_calls(
+        self, question: str, links: Links, plan: LLMResponse, *, route: str, system: str = ""
+    ) -> AgentResponse:
+        reply = AgentResponse(question, STATUS_OK, "", route)
+        llm_ms = plan.latency_ms
+        usage = {"calls": 0 if route == "fast_path" else 1, "model": plan.model}
+        usage.update(prompt_tokens=plan.prompt_tokens, output_tokens=plan.output_tokens)
+        sections: list[str] = []
+        previous: QueryResult | None = None
+        tool_started = time.perf_counter()
+        try:
+            for call in plan.calls:
+                if call.name == "run_sql":
+                    previous, section, repair = self._run_sql_step(question, links, call, reply, system)
+                    sections.append(section)
+                    if repair is not None:
+                        llm_ms += repair.latency_ms
+                        usage["calls"] += 1
+                        usage["prompt_tokens"] += repair.prompt_tokens
+                        usage["output_tokens"] += repair.output_tokens
+                elif call.name == "exposure_calculator":
+                    sections.extend(self._run_exposure_step(call, previous, reply))
+                elif call.name == "decline":
+                    kind = str(call.args.get("kind", ""))
+                    status = STATUS_CLARIFY if kind == "ambiguous" else STATUS_DECLINED
+                    message = str(call.args.get("message", "")) or "I can't answer that from this data."
+                    raise _StopPlan(status, message)
+                else:
+                    raise _StopPlan(STATUS_ERROR, "The model requested an unknown tool.")
+        except _StopPlan as stop:
+            reply.status = stop.status
+            sections = [stop.message]
+        reply.answer = "\n\n".join(s for s in sections if s)
+        reply.llm = usage
+        tool_ms = (time.perf_counter() - tool_started) * 1000 - (llm_ms - plan.latency_ms)
+        reply.timings_ms = {"llm": round(llm_ms, 3), "tools": round(max(tool_ms, 0.0), 3)}
+        return reply
+
+    def _run_sql_step(
+        self, question: str, links: Links, call: ToolCall, reply: AgentResponse, system: str
+    ) -> tuple[QueryResult, str, LLMResponse | None]:
+        sql = str(call.args.get("sql", ""))
+        title = str(call.args.get("title", ""))
+        step = Step("run_sql", {"sql": sql, "title": title})
+        reply.steps.append(step)
+        repair: LLMResponse | None = None
+        attempts = self.settings.sql_repair_attempts
+        while True:
+            try:
+                result = self.tools.run_sql(sql)
+                break
+            except SQLBlocked as exc:
+                step.error = str(exc)
+                raise _StopPlan(STATUS_BLOCKED, f"That query was blocked: {exc}") from exc
+            except SQLExecutionError as exc:
+                step.error = str(exc)
+                if attempts <= 0 or self.llm is None:
+                    raise _StopPlan(STATUS_ERROR, "I could not produce a valid query for that question.") from exc
+                attempts -= 1
+                try:
+                    repair = self.llm.plan(system, build_repair_prompt(question, links, sql, str(exc)))
+                except LLMError as llm_exc:
+                    raise _StopPlan(STATUS_ERROR, "I could not produce a valid query for that question.") from llm_exc
+                fixed = next((c for c in repair.calls if c.name == "run_sql"), None)
+                if fixed is None:
+                    raise _StopPlan(STATUS_ERROR, "I could not produce a valid query for that question.") from exc
+                sql = str(fixed.args.get("sql", ""))
+                step.input["sql"] = sql
+        step.error = None
+        step.columns = result.columns
+        step.rows = result.rows
+        step.truncated = result.truncated
+        step.elapsed_ms = round(result.elapsed_ms, 3)
+        step.vm_steps = result.vm_steps
+        step.full_scans = result.full_scans
+        return result, render_sql(result, title, question), repair
+
+    def _run_exposure_step(self, call: ToolCall, previous: QueryResult | None, reply: AgentResponse) -> list[str]:
+        names = [str(n) for n in (call.args.get("portfolio_names") or [])]
+        if call.args.get("use_previous_sql_result"):
+            names = _portfolio_names_from(previous)
+            if not names:
+                raise _StopPlan(STATUS_OK, "No portfolios matched, so there are no exposures to calculate.")
+        if not names:
+            raise _StopPlan(STATUS_CLARIFY, "Which portfolio would you like the sector exposure for?")
+        if len(names) > _MAX_FANOUT:
+            raise _StopPlan(STATUS_CLARIFY, f"That matches {len(names)} portfolios. Please narrow it down.")
+        sections = []
+        for name in names:
+            step = Step("exposure_calculator", {"portfolio_name": name})
+            reply.steps.append(step)
+            try:
+                result = self.tools.exposure_calculator(name)
+            except AmbiguousPortfolio as exc:
+                step.error = "ambiguous portfolio"
+                raise _StopPlan(STATUS_CLARIFY, _clarify_message(exc)) from exc
+            step.exposure = result.to_dict()
+            step.elapsed_ms = round(result.elapsed_ms, 3)
+            step.vm_steps = result.vm_steps
+            reply.warnings.extend(f"{result.portfolio_name}: {w}" for w in result.warnings)
+            sections.append(render_exposure(result))
+        return sections
+
+
+def _portfolio_names_from(result: QueryResult | None) -> list[str]:
+    if result is None or not result.rows:
+        return []
+    lowered = [c.lower() for c in result.columns]
+    index = lowered.index("portfolio_name") if "portfolio_name" in lowered else 0
+    return [str(row[index]) for row in result.rows if row[index] is not None]
+
+
+def _clarify_message(exc: AmbiguousPortfolio) -> str:
+    if exc.candidates:
+        return f"'{exc.reference}' could mean: {', '.join(exc.candidates)}. Which one do you mean?"
+    return f"I couldn't find a portfolio called '{exc.reference}'."

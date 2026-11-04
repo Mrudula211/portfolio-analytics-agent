@@ -1,0 +1,193 @@
+"use strict";
+
+// All data reaches the page through textContent, so database values can never run as HTML.
+const el = (id) => document.getElementById(id);
+
+const ROUTE_LABELS = {
+  cache: "Cached answer",
+  fast_path: "Direct calculation, no model call",
+  model: "Gemini plan, computed from the database",
+  validation: "Not sent",
+};
+
+function make(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function formatCell(value, column) {
+  if (value === null || value === undefined) return "-";
+  if (typeof value !== "number") return String(value);
+  if (/(^|_)id$/i.test(column)) return String(value);
+  const digits = Number.isInteger(value) ? 0 : Math.abs(value) < 1 ? 4 : 2;
+  return value.toLocaleString("en-US", { maximumFractionDigits: digits });
+}
+
+function renderTable(columns, rows, caption) {
+  const wrap = make("div", "table-wrap");
+  const table = make("table");
+  if (caption) table.append(make("caption", "", caption));
+  const head = make("tr");
+  const numeric = columns.map((_, i) => rows.length > 0 && rows.every((r) => r[i] === null || typeof r[i] === "number"));
+  columns.forEach((column, i) => head.append(make("th", numeric[i] ? "num" : "", column.replaceAll("_", " "))));
+  const thead = make("thead");
+  thead.append(head);
+  const tbody = make("tbody");
+  rows.forEach((row) => {
+    const tr = make("tr");
+    row.forEach((value, i) => tr.append(make("td", numeric[i] ? "num" : "", formatCell(value, columns[i]))));
+    tbody.append(tr);
+  });
+  table.append(thead, tbody);
+  wrap.append(table);
+  return wrap;
+}
+
+function showTooltip(event, exposure) {
+  const tip = el("tooltip");
+  tip.replaceChildren(
+    make("strong", "", exposure.sector),
+    make("div", "", `Exposure ${exposure.exposure_pct.toFixed(2)}% of equities`),
+    make("div", "", `Weight ${exposure.portfolio_weight_pct.toFixed(2)}% of portfolio`),
+    make("div", "", `By market value ${exposure.market_value_pct.toFixed(2)}%`),
+    make("div", "", `${exposure.holdings} holding${exposure.holdings === 1 ? "" : "s"}`),
+  );
+  tip.hidden = false;
+  tip.style.left = `${Math.min(event.clientX + 14, window.innerWidth - 240)}px`;
+  tip.style.top = `${event.clientY + 14}px`;
+}
+
+function renderExposure(data) {
+  const block = make("div", "block");
+  block.append(make("h2", "", `${data.portfolio_name}: share of equity holdings by sector`));
+  if (data.exposures.length === 0) {
+    block.append(make("p", "", "No equity holdings, so there is no sector exposure."));
+    return block;
+  }
+  const bars = make("div", "bars");
+  const largest = Math.max(...data.exposures.map((e) => e.exposure_pct));
+  data.exposures.forEach((exposure) => {
+    const hit = make("div", "bar-hit");
+    const bar = make("div", "bar");
+    bar.style.width = `${(exposure.exposure_pct / largest) * 100}%`;
+    hit.append(bar);
+    hit.addEventListener("mousemove", (event) => showTooltip(event, exposure));
+    hit.addEventListener("mouseleave", () => { el("tooltip").hidden = true; });
+    bars.append(
+      make("div", "bar-label", exposure.sector),
+      hit,
+      make("div", "bar-value", `${exposure.exposure_pct.toFixed(1)}%`),
+    );
+  });
+  block.append(bars);
+
+  const details = make("details");
+  details.append(make("summary", "", "Show table, including whole-portfolio weight and market value"));
+  details.append(renderTable(
+    ["sector", "exposure_pct", "portfolio_weight_pct", "market_value_pct", "holdings"],
+    data.exposures.map((e) => [e.sector, e.exposure_pct, e.portfolio_weight_pct, e.market_value_pct, e.holdings]),
+  ));
+  block.append(details);
+  return block;
+}
+
+function renderSqlStep(step) {
+  const block = make("div", "block");
+  if (step.input.title) block.append(make("h2", "", step.input.title));
+  if (step.rows && step.rows.length > 0) {
+    block.append(renderTable(step.columns, step.rows, step.truncated ? "Results were cut off at the row limit." : ""));
+  }
+  if (step.input.sql) {
+    const details = make("details");
+    details.append(make("summary", "", "Show SQL"));
+    details.append(make("pre", "", step.input.sql));
+    block.append(details);
+  }
+  return block;
+}
+
+function headline(reply) {
+  if (reply.status !== "ok") return reply.answer;
+  const sql = reply.steps.find((s) => s.tool === "run_sql");
+  const onlySql = reply.steps.every((s) => s.tool === "run_sql");
+  if (onlySql && sql && sql.rows && sql.rows.length === 1 && sql.columns.length === 1) return reply.answer;
+  if (onlySql && sql && sql.rows && sql.rows.length === 0) return reply.answer;
+  return "";
+}
+
+function render(reply) {
+  el("result").hidden = false;
+  el("route").textContent = ROUTE_LABELS[reply.route] || reply.route;
+  const total = reply.timings_ms.total;
+  el("latency").textContent = total === undefined ? "" : `${total < 10 ? total.toFixed(1) : Math.round(total)} ms`;
+  const parts = [];
+  if (reply.timings_ms.llm) parts.push(`model ${Math.round(reply.timings_ms.llm)} ms`);
+  if (reply.timings_ms.tools) parts.push(`database ${reply.timings_ms.tools.toFixed(1)} ms`);
+  el("breakdown").textContent = parts.join(" + ");
+  el("message").textContent = headline(reply);
+  el("warnings").replaceChildren(...reply.warnings.map((w) => make("li", "", w)));
+  el("content").replaceChildren(...(reply.status === "ok" ? reply.steps : []).map(
+    (step) => (step.exposure ? renderExposure(step.exposure) : renderSqlStep(step)),
+  ));
+}
+
+function renderProblem(message) {
+  el("result").hidden = false;
+  el("route").textContent = "";
+  el("latency").textContent = "";
+  el("breakdown").textContent = "";
+  el("message").textContent = message;
+  el("warnings").replaceChildren();
+  el("content").replaceChildren();
+}
+
+async function ask(question) {
+  const button = el("ask-button");
+  button.disabled = true;
+  try {
+    const response = await fetch("/api/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
+    });
+    if (response.status === 429) return renderProblem("Too many questions. Please wait a minute.");
+    if (!response.ok) return renderProblem("That question could not be processed. Please try rewording it.");
+    render(await response.json());
+  } catch {
+    renderProblem("Could not reach the server. Please check your connection and try again.");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+el("ask-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const question = el("question").value.trim();
+  if (question) ask(question);
+});
+
+async function start() {
+  const [examples, health] = await Promise.all([
+    fetch("/api/examples").then((r) => r.json()),
+    fetch("/api/health").then((r) => r.json()),
+  ]);
+  examples.forEach((question) => {
+    const chip = make("button", "", question);
+    chip.type = "button";
+    chip.title = question;
+    chip.addEventListener("click", () => {
+      el("question").value = question;
+      ask(question);
+    });
+    el("examples").append(chip);
+  });
+  if (!health.model_configured) {
+    const note = el("model-note");
+    note.textContent = "No Gemini API key is configured here, so only direct sector exposure questions can be answered.";
+    note.hidden = false;
+  }
+}
+
+start();

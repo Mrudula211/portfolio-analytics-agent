@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Portfolio Analytics Agent</title>
+  <meta name="description" content="Ask questions about portfolio data in plain English.">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <main class="page">
+    <header class="masthead">
+      <h1>Portfolio Analytics Agent</h1>
+      <p>Ask about holdings, risk and sector exposure in plain English.</p>
+    </header>
+
+    <form id="ask-form" class="ask" autocomplete="off">
+      <label for="question" class="visually-hidden">Your question</label>
+      <input id="question" name="question" type="text" maxlength="500" required
+             placeholder="What are the sector exposures for the Tech Innovation Fund?">
+      <button id="ask-button" type="submit">Ask</button>
+    </form>
+
+    <div id="examples" class="examples" aria-label="Example questions"></div>
+    <p id="model-note" class="note" hidden></p>
+
+    <section id="result" class="result" aria-live="polite" hidden>
+      <div class="result-head">
+        <span id="route" class="route"></span>
+        <span id="latency" class="latency"></span>
+        <span id="breakdown" class="breakdown"></span>
+      </div>
+      <p id="message" class="message"></p>
+      <ul id="warnings" class="warnings"></ul>
+      <div id="content"></div>
+    </section>
+
+    <footer class="footer">
+      Built for a PL Capital technical assessment using its sample dataset. Not a PL Capital product and not investment advice.
+      <a href="/docs">API docs</a>
+    </footer>
+  </main>
+  <div id="tooltip" class="tooltip" role="status" hidden></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+from concurrent.futures import ThreadPoolExecutor
+
+import pytest
+from conftest import sql_call
+from fastapi.testclient import TestClient
+
+from portfolio_agent.api import RateLimiter, create_app
+
+
+@pytest.fixture
+def client(make_agent):
+    agent = make_agent({"How many portfolios exist?": [sql_call("SELECT COUNT(*) FROM portfolios")]})
+    with TestClient(create_app(agent)) as test_client:
+        yield test_client
+
+
+def test_ask_returns_answer_and_trace(client):
+    body = client.post("/api/ask", json={"question": "How many portfolios exist?"}).json()
+    assert body["status"] == "ok" and body["route"] == "model" and "13" in body["answer"]
+    assert body["steps"][0]["input"]["sql"].startswith("SELECT")
+    assert body["timings_ms"]["total"] > 0
+
+
+def test_repeat_question_is_served_from_cache(client):
+    client.post("/api/ask", json={"question": "How many portfolios exist?"})
+    assert client.post("/api/ask", json={"question": "how many portfolios exist"}).json()["route"] == "cache"
+
+
+def test_empty_and_oversized_questions_rejected(client):
+    assert client.post("/api/ask", json={"question": ""}).status_code == 422
+    assert client.post("/api/ask", json={"question": "x" * 3000}).status_code == 422
+    assert client.post("/api/ask", json={"question": "x" * 600}).json()["status"] == "invalid"
+
+
+def test_rate_limit_returns_429(client):
+    client.app.state.limiter = RateLimiter(limit=2)
+    payload = {"question": "How many portfolios exist?"}
+    codes = [client.post("/api/ask", json=payload).status_code for _ in range(3)]
+    assert codes == [200, 200, 429]
+
+
+def test_rate_limiter_window_recovers():
+    limiter = RateLimiter(limit=1, window_s=0.0)
+    assert limiter.allow("a") and limiter.allow("a")
+
+
+def test_rate_limit_is_per_client():
+    limiter = RateLimiter(limit=1)
+    assert limiter.allow("a") and limiter.allow("b") and not limiter.allow("a")
+
+
+def test_health_examples_metrics_and_ui(client):
+    assert client.get("/api/health").json()["portfolios"] == 13
+    assert len(client.get("/api/examples").json()) > 0
+    client.post("/api/ask", json={"question": "How many portfolios exist?"})
+    assert client.get("/api/metrics").json()["routes"]["model"]["count"] == 1
+    page = client.get("/")
+    assert page.status_code == 200 and "Portfolio Analytics Agent" in page.text
+
+
+def test_security_headers_present(client):
+    headers = client.get("/").headers
+    assert "default-src 'self'" in headers["content-security-policy"]
+    assert headers["x-content-type-options"] == "nosniff"
+
+
+def test_concurrent_requests_succeed(client):
+    client.app.state.limiter = RateLimiter(limit=1000)
+
+    def call(index):
+        payload = {"question": "sector exposure of Balanced Portfolio" if index % 2 else "How many portfolios exist?"}
+        return client.post("/api/ask", json=payload).json()["status"]
+
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        assert set(pool.map(call, range(100))) == {"ok"}
