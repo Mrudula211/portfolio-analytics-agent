@@ -1,16 +1,12 @@
 """Metadata the model needs: schema cards, a business glossary and entity linking.
 
-Three retrieval mechanisms live here, all in-process with no network hop:
-- `EntityLinker` maps loose wording ("international equity") to exact database values.
-- `retrieve_tables` is lexical ranking plus foreign-key graph expansion (a small GraphRAG).
-- `SchemaCatalog` renders compact table cards generated from the live database.
+`EntityLinker` maps loose wording ("international equity") to exact database values.
+`SchemaCatalog` renders compact table cards generated from the live database.
 """
 
 from __future__ import annotations
 
-import math
 import re
-from collections import Counter, deque
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -53,20 +49,6 @@ current or latest figure must filter to the latest date for that portfolio, neve
 unless asked.
 - "holdings" listings show holding_id, symbol, company_name, quantity and the requested metric."""
 
-# Words people use for a table that do not appear in its column names.
-TABLE_SYNONYMS = {
-    "portfolios": "fund funds portfolio aum assets under management risk level strategy active passive status",
-    "holdings": "holding position positions own owns held weight cost basis quantity shares value top",
-    "securities": "security stock stocks bond bonds company ticker symbol price market cap coupon maturity value",
-    "sectors": "sector sectors industry technology financials healthcare energy automotive staples discretionary"
-    " utilities exposure diversification",
-    "transactions": "transaction transactions trade trades buy bought sell sold fees settlement",
-    "historical_prices": "price history historical close closing open high low volume daily",
-    "portfolio_performance": "performance nav return returns sharpe volatility drawdown",
-    "risk_metrics": "risk var cvar beta correlation tracking error information sortino",
-    "benchmarks": "benchmark benchmarks index indices inception",
-}
-
 _GENERIC_NAME_TOKENS = frozenset(
     "fund portfolio index total market plus the stock bond equity value cap small income".split()
 )
@@ -84,11 +66,6 @@ _SECTOR_ALIASES = {
 
 def tokens(text: str) -> list[str]:
     return re.findall(r"[a-z0-9]+", text.lower())
-
-
-def _stemmed(text: str) -> list[str]:
-    """Crude plural folding; enough to make "sector" and "sectors" the same term."""
-    return [word[:-1] if len(word) > 3 and word.endswith("s") and not word.endswith("ss") else word for word in tokens(text)]
 
 
 @dataclass
@@ -180,13 +157,9 @@ class SchemaCatalog:
     def __init__(self, db_path: Path):
         conn = connect_readonly(db_path)
         self.cards: dict[str, str] = {}
-        self.edges: dict[str, set[str]] = {table: set() for table in LOAD_ORDER}
         try:
             for table in LOAD_ORDER:
                 self.cards[table] = self._card(conn, table)
-                for fk in conn.execute(f"PRAGMA foreign_key_list({table})"):
-                    self.edges[table].add(fk[2])
-                    self.edges[fk[2]].add(table)
             self.portfolio_names = [r[0] for r in conn.execute("SELECT portfolio_name FROM portfolios ORDER BY 1")]
             self.sector_names = [r[0] for r in conn.execute("SELECT sector_name FROM sectors ORDER BY 1")]
             self.securities = [
@@ -195,18 +168,6 @@ class SchemaCatalog:
             ]
         finally:
             conn.close()
-        self._documents = {t: _stemmed(self._columns_text(db_path, t) + " " + TABLE_SYNONYMS[t]) for t in LOAD_ORDER}
-
-    @staticmethod
-    def _columns_text(db_path: Path, table: str) -> str:
-        """Table and own column names; key columns would make every table match "portfolio"."""
-        conn = connect_readonly(db_path)
-        try:
-            names = [row[1] for row in conn.execute(f"PRAGMA table_info({table})") if not row[1].endswith("_id")]
-        finally:
-            conn.close()
-        return " ".join([table, table, *names])
-
     @staticmethod
     def _card(conn, table: str) -> str:
         parts = []
@@ -226,53 +187,5 @@ class SchemaCatalog:
             parts.append(piece)
         return f"{table}({'; '.join(parts)})"
 
-    def render(self, tables: list[str] | None = None) -> str:
-        chosen = tables if tables is not None else list(LOAD_ORDER)
-        return "\n".join(self.cards[t] for t in LOAD_ORDER if t in chosen)
-
-    def retrieve_tables(self, question: str, k: int = 4, relative_cutoff: float = 0.35) -> list[str]:
-        """Rank tables with BM25, then add the join path between the ones selected."""
-        query = set(_stemmed(question))
-        total_docs = len(self._documents)
-        average_len = sum(len(d) for d in self._documents.values()) / total_docs
-        counts = {t: Counter(d) for t, d in self._documents.items()}
-        scores: dict[str, float] = {}
-        for table, document in self._documents.items():
-            score = 0.0
-            for term in query:
-                frequency = counts[table][term]
-                if frequency:
-                    containing = sum(1 for c in counts.values() if term in c)
-                    idf = math.log(1 + (total_docs - containing + 0.5) / (containing + 0.5))
-                    score += idf * frequency * 2.2 / (frequency + 1.2 * (0.25 + 0.75 * len(document) / average_len))
-            scores[table] = score
-        best = max(scores.values())
-        if best <= 0:
-            return list(LOAD_ORDER)  # Nothing matched: send everything rather than guess.
-        ranked = sorted((t for t in scores if scores[t] >= relative_cutoff * best), key=lambda t: -scores[t])[:k]
-        return self._connect(ranked)
-
-    def _connect(self, seeds: list[str]) -> list[str]:
-        """Union of shortest foreign-key paths, so every selected table can be joined."""
-        selected = {seeds[0]}
-        for seed in seeds[1:]:
-            selected |= self._shortest_path(seed, selected)
-        return [t for t in LOAD_ORDER if t in selected]
-
-    def _shortest_path(self, start: str, targets: set[str]) -> set[str]:
-        previous: dict[str, str | None] = {start: None}
-        queue = deque([start])
-        while queue:
-            node = queue.popleft()
-            if node in targets:
-                path = set()
-                current: str | None = node
-                while current is not None:
-                    path.add(current)
-                    current = previous[current]
-                return path
-            for neighbour in sorted(self.edges[node]):
-                if neighbour not in previous:
-                    previous[neighbour] = node
-                    queue.append(neighbour)
-        return {start}
+    def render(self) -> str:
+        return "\n".join(self.cards[t] for t in LOAD_ORDER)

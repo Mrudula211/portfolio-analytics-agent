@@ -123,23 +123,6 @@ class GeminiClient:
             )
         ]
 
-    @staticmethod
-    def _thinking(model: str) -> types.ThinkingConfig:
-        # Generating one query does not benefit from long deliberation and it is the
-        # largest controllable part of latency. 2.x models use a budget, 3.x a level.
-        if model.startswith("gemini-2"):
-            return types.ThinkingConfig(thinking_budget=0)
-        if model.startswith("gemini-3.8"):  # Lowest level this model accepts.
-            return types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW)
-        return types.ThinkingConfig(thinking_level=types.ThinkingLevel.MINIMAL)
-
-    def warm_up(self) -> None:
-        """Open the TLS connection before the first user arrives; costs no tokens."""
-        try:
-            self._client.models.get(model=self._models[0])
-        except Exception as exc:  # A failed warm-up must never stop the service starting.
-            log.warning("llm_warmup_failed error=%s", type(exc).__name__)
-
     def _call(self, model: str, system: str, prompt: str) -> LLMResponse:
         started = time.perf_counter()
         response = self._client.models.generate_content(
@@ -153,7 +136,9 @@ class GeminiClient:
                 tool_config=types.ToolConfig(
                     function_calling_config=types.FunctionCallingConfig(mode=types.FunctionCallingConfigMode.ANY)
                 ),
-                thinking_config=self._thinking(model),
+                # Generating one query needs little deliberation, and this is the largest
+                # controllable part of latency.
+                thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.MINIMAL),
             ),
         )
         calls = [ToolCall(c.name, dict(c.args or {})) for c in (response.function_calls or [])]

@@ -121,8 +121,6 @@ def execute_select(
         scans = _full_scans(conn, statement, params)
     except sqlite3.ProgrammingError as exc:
         raise SQLBlocked("Only a single statement is allowed.") from exc
-    except sqlite3.Warning as exc:  # Raised for multiple statements on older Pythons.
-        raise SQLBlocked("Only a single statement is allowed.") from exc
     except sqlite3.Error as exc:
         message = str(exc)
         if "not authorized" in message or "prohibited" in message or "readonly" in message:

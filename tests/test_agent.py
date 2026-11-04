@@ -1,11 +1,10 @@
-import dataclasses
 import threading
 
 import pytest
 from conftest import sql_call
 
 from portfolio_agent.agent import PortfolioAgent
-from portfolio_agent.llm import LLMError, LLMResponse, ToolCall
+from portfolio_agent.llm import LLMError, ToolCall
 
 
 def test_simple_exposure_uses_no_model(make_agent):
@@ -190,14 +189,3 @@ def test_concurrent_questions_all_answer_correctly(make_agent):
     assert errors == []
 
 
-def test_retrieved_schema_mode_sends_fewer_tables(settings):
-    captured = {}
-
-    class Spy:
-        def plan(self, system, prompt):
-            captured["system"] = system
-            return LLMResponse([sql_call("SELECT COUNT(*) FROM portfolios")], "spy")
-
-    agent = PortfolioAgent(dataclasses.replace(settings, schema_mode="retrieved"), llm=Spy())
-    agent.answer_question("How many portfolios exist?")
-    assert "risk_metrics(" not in captured["system"] and "portfolios(" in captured["system"]

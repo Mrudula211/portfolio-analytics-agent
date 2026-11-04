@@ -6,7 +6,7 @@ The reasoning behind the main choices, what was rejected, and what is still weak
 
 **No, and it was tested rather than assumed.** Semantic search is good at finding relevant passages in a large collection. Here, the collection is nine tables.
 
-`scripts/schema_retrieval_benchmark.py` compares sending the full schema with in-process retrieval (BM25 plus foreign-key graph expansion), across the 23 evaluation questions that have a reference query:
+I compared sending the full schema with in-process retrieval (BM25 plus foreign-key graph expansion), across the 23 evaluation questions that have a reference query. The benchmark and retrieval code were then removed as unneeded, and remain in git history at commit `95db72b`:
 
 | | Full schema | Retrieved schema |
 | --- | --- | --- |
@@ -16,7 +16,7 @@ The reasoning behind the main choices, what was rejected, and what is still weak
 
 Retrieval saves about 480 tokens but hides a needed table on three questions, including assignment Q5. A query cannot be correct if the model never saw the table. Embeddings might improve recall, but this was not measured, and they would add a network call before every question or a model and an index in the container, in exchange for those same 480 tokens.
 
-So the default is the full schema, and retrieval stays available as `SCHEMA_MODE=retrieved` for an A/B test with `evaluate.py --schema-mode`.
+So the agent sends the full schema.
 
 The problems retrieval is usually brought in to solve are handled more directly:
 
@@ -55,7 +55,7 @@ The first live run used `gemini-3.5-flash-lite` on the assumption that a Lite mo
 
 Latency is bimodal and failures are common, and the SDK's automatic retries made it worse by waiting on a congested model. The client now disables them and hedges: it asks `gemini-3.5-flash`, and starts the next model after 2.5 s or on any failure, taking the first answer. In the next run, model-routed questions that got an answer took 1.7 s at the median and 2.5 s at p95.
 
-**The trade-offs:** a hedge uses extra quota when it fires, and which model answers can vary, so the evaluation report records the answering model for every question. `scripts/model_latency_benchmark.py` repeats the comparison, because these numbers will change.
+**The trade-offs:** a hedge uses extra quota when it fires, and which model answers can vary, so the evaluation report records the answering model for every question. These numbers will change, so they are worth re-measuring before relying on a model.
 
 **Free-tier quota is a real constraint:** 20 requests per model per day. Evaluation therefore paces itself and can resume, and outages are reported separately from accuracy.
 

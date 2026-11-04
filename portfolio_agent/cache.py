@@ -1,4 +1,4 @@
-"""Thread-safe exact-match answer cache with LRU eviction and a TTL.
+"""Thread-safe exact-match answer cache with LRU eviction.
 
 Keys are normalised text, not embeddings, on purpose: "high risk AUM" and "low risk AUM"
 are close in embedding space and have different answers. In finance a false cache hit is
@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import re
 import threading
-import time
 from collections import OrderedDict
 from typing import Any
 
@@ -19,27 +18,20 @@ def normalize_question(question: str) -> str:
 
 
 class AnswerCache:
-    def __init__(self, max_size: int, ttl_s: float):
+    def __init__(self, max_size: int):
         self._max_size = max_size
-        self._ttl_s = ttl_s
-        self._items: OrderedDict[str, tuple[float, Any]] = OrderedDict()
+        self._items: OrderedDict[str, Any] = OrderedDict()
         self._lock = threading.Lock()
 
     def get(self, key: str) -> Any | None:
         with self._lock:
-            item = self._items.get(key)
-            if item is None:
-                return None
-            stored_at, value = item
-            if time.monotonic() - stored_at > self._ttl_s:
-                del self._items[key]
-                return None
-            self._items.move_to_end(key)
-            return value
+            if key in self._items:
+                self._items.move_to_end(key)
+            return self._items.get(key)
 
     def put(self, key: str, value: Any) -> None:
         with self._lock:
-            self._items[key] = (time.monotonic(), value)
+            self._items[key] = value
             self._items.move_to_end(key)
             while len(self._items) > self._max_size:
                 self._items.popitem(last=False)

@@ -13,7 +13,7 @@ Consumer Staples  11%           11%                   8.60%             1
 Note: Recorded weights and market values disagree by up to 11.2 points; the recorded weights may be stale.
 ```
 
-The original brief is in [docs/ASSIGNMENT.md](docs/ASSIGNMENT.md). Design decisions and trade-offs are in [docs/DESIGN.md](docs/DESIGN.md).
+Design decisions and trade-offs are in [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Run it
 
@@ -66,20 +66,20 @@ Latency comes from what the system avoids:
 - **One model call per question.** Gemini returns the whole plan at once, including both steps of a hybrid question. A second call happens only to repair invalid SQL.
 - **No model call to write the answer.** Code formats the database's values, which also means the model cannot misquote or invent a figure.
 - **No model call when none is needed.** A plain exposure request for one named fund goes straight to the calculator.
-- **Low-effort model settings.** Minimal thinking, a warmed connection and a prompt with no result data in it.
+- **Low-effort model settings.** Minimal thinking and a prompt with no result data in it.
 - **Hedged requests.** If a model has not answered in 2.5 s, or fails, the next one starts and the first answer wins. Shared-tier latency swings between about 1 s and over 10 s for identical requests, so this matters more than the choice of model.
 
 ## Results
 
 ### Live model accuracy and latency
 
-> **Final run pending.** The free tier allows 20 requests per model per day, so the evaluation spans several sessions: `python evaluate.py --extended --delay 4 --resume` keeps scored results and reruns the rest, writing `reports/live_full_extended.md`.
+> **Final run pending.** The free tier allows 20 requests per model per day, so the evaluation spans several sessions: `python evaluate.py --extended --delay 4 --resume` keeps scored results and reruns the rest, writing `reports/live_extended.md`.
 
 ### Measured without the model
 
 | Measure | Result |
 | --- | --- |
-| Unit and integration tests | 106 passed |
+| Unit and integration tests | 103 passed |
 | Scorer self-test, 40 cases with reference plans replayed | 40 of 40 |
 | Sector exposure fast path, uncached, 300 runs | p50 2.7 ms, p95 4.3 ms |
 | Exact-repeat cache hit, 300 runs | p50 0.015 ms |
@@ -136,7 +136,7 @@ curl -X POST http://127.0.0.1:8000/api/ask \
   -d '{"question":"What are the sector exposures for the Tech Innovation Fund?"}'
 ```
 
-The response includes `status`, `answer`, `route`, `steps` (SQL, rows, exposures), `warnings`, `timings_ms` and `llm`. Also available: `GET /api/health`, `GET /api/metrics` (latency by route) and `GET /docs`.
+The response includes `status`, `answer`, `route`, `steps` (SQL, rows, exposures), `warnings`, `timings_ms` and `llm`. Also available: `GET /api/health` and `GET /docs`.
 
 ## Deploy
 
@@ -150,8 +150,6 @@ hf auth login
 python scripts/deploy_hf_space.py your-username/portfolio-analytics-agent
 ```
 
-**Render:** create a Blueprint from this repository (`render.yaml`) and set `GEMINI_API_KEY`. The free plan sleeps when idle, so the first request after a pause is slow.
-
 **Any container host:** `docker build -t portfolio-agent . && docker run -p 7860:7860 -e GEMINI_API_KEY=... portfolio-agent`
 
 ## Project layout
@@ -161,7 +159,7 @@ portfolio_agent/
   agent.py        routing and plan execution
   tools.py        exposure calculator and SQL tool
   sql_guard.py    safe execution of model-written SQL
-  metadata.py     schema cards, glossary, entity linking, schema retrieval
+  metadata.py     schema cards, glossary, entity linking
   prompts.py      prompt assembly
   llm.py          Gemini client
   render.py       answer formatting, no model involved
@@ -171,6 +169,6 @@ portfolio_agent/
   api.py, static/ REST API and web UI
 evaluate.py       evaluation command
 eval/             held-out questions
-scripts/          retrieval and model latency benchmarks, deployment
+scripts/          deployment
 tests/            unit and integration tests
 ```

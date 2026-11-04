@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import copy
-import hashlib
 import logging
 import re
 import time
@@ -96,11 +95,8 @@ class PortfolioAgent:
         self.catalog = SchemaCatalog(self.settings.db_path)
         self.linker = EntityLinker(self.catalog.portfolio_names, self.catalog.sector_names, self.catalog.securities)
         self.tools = Tools(self.settings, self.linker)
-        self.cache = AnswerCache(self.settings.cache_size, self.settings.cache_ttl_s)
-        self._full_system = build_system_prompt(self.catalog.render())
-        self._version = hashlib.sha256(
-            f"{self._full_system}|{self.settings.gemini_model}|{self.settings.schema_mode}".encode()
-        ).hexdigest()[:12]
+        self.cache = AnswerCache(self.settings.cache_size)
+        self._system = build_system_prompt(self.catalog.render())
         self.llm = llm if llm is not None else self._default_llm()
 
     def _default_llm(self) -> LLMClient | None:
@@ -118,7 +114,7 @@ class PortfolioAgent:
             message = f"Please ask a question of 1 to {self.settings.max_question_chars} characters."
             return AgentResponse(question, STATUS_INVALID, message, "validation", request_id)
 
-        key = f"{self._version}:{normalize_question(question)}"
+        key = normalize_question(question)
         if use_cache:
             hit = self.cache.get(key)
             if hit is not None:
@@ -162,11 +158,6 @@ class PortfolioAgent:
             and not _NOT_SIMPLE.search(question)
         )
 
-    def _system_prompt(self, question: str) -> str:
-        if self.settings.schema_mode == "retrieved":
-            return build_system_prompt(self.catalog.render(self.catalog.retrieve_tables(question)))
-        return self._full_system
-
     def _answer_with_model(self, question: str, links: Links) -> AgentResponse:
         if self.llm is None:
             return AgentResponse(
@@ -177,9 +168,8 @@ class PortfolioAgent:
                 "model",
             )
         started = time.perf_counter()
-        system = self._system_prompt(question)
         try:
-            plan = self.llm.plan(system, build_user_prompt(question, links))
+            plan = self.llm.plan(self._system, build_user_prompt(question, links))
         except LLMError as exc:
             log.warning("llm_failed reason=%s", exc)
             return AgentResponse(
@@ -190,11 +180,9 @@ class PortfolioAgent:
                 timings_ms={"llm": round((time.perf_counter() - started) * 1000, 3)},
             )
         plan.latency_ms = (time.perf_counter() - started) * 1000  # Includes retries and fallback.
-        return self._answer_with_calls(question, links, plan, route="model", system=system)
+        return self._answer_with_calls(question, links, plan, route="model")
 
-    def _answer_with_calls(
-        self, question: str, links: Links, plan: LLMResponse, *, route: str, system: str = ""
-    ) -> AgentResponse:
+    def _answer_with_calls(self, question: str, links: Links, plan: LLMResponse, *, route: str) -> AgentResponse:
         reply = AgentResponse(question, STATUS_OK, "", route)
         llm_ms = plan.latency_ms
         usage = {"calls": 0 if route == "fast_path" else 1, "model": plan.model}
@@ -205,7 +193,7 @@ class PortfolioAgent:
         try:
             for call in plan.calls:
                 if call.name == "run_sql":
-                    previous, section, repair = self._run_sql_step(question, links, call, reply, system)
+                    previous, section, repair = self._run_sql_step(question, links, call, reply)
                     sections.append(section)
                     if repair is not None:
                         llm_ms += repair.latency_ms
@@ -231,36 +219,27 @@ class PortfolioAgent:
         return reply
 
     def _run_sql_step(
-        self, question: str, links: Links, call: ToolCall, reply: AgentResponse, system: str
+        self, question: str, links: Links, call: ToolCall, reply: AgentResponse
     ) -> tuple[QueryResult, str, LLMResponse | None]:
         sql = str(call.args.get("sql", ""))
         title = str(call.args.get("title", ""))
         step = Step("run_sql", {"sql": sql, "title": title})
         reply.steps.append(step)
         repair: LLMResponse | None = None
-        attempts = self.settings.sql_repair_attempts
-        while True:
+        try:
             try:
                 result = self.tools.run_sql(sql)
-                break
-            except SQLBlocked as exc:
-                step.error = str(exc)
-                raise _StopPlan(STATUS_BLOCKED, f"That query was blocked: {exc}") from exc
-            except SQLExecutionError as exc:
-                step.error = str(exc)
-                if attempts <= 0 or self.llm is None:
-                    raise _StopPlan(STATUS_ERROR, "I could not produce a valid query for that question.") from exc
-                attempts -= 1
-                try:
-                    repair = self.llm.plan(system, build_repair_prompt(question, links, sql, str(exc)))
-                except LLMError as llm_exc:
-                    raise _StopPlan(STATUS_ERROR, "I could not produce a valid query for that question.") from llm_exc
-                fixed = next((c for c in repair.calls if c.name == "run_sql"), None)
-                if fixed is None:
-                    raise _StopPlan(STATUS_ERROR, "I could not produce a valid query for that question.") from exc
-                sql = str(fixed.args.get("sql", ""))
+            except SQLExecutionError as exc:  # Invalid but harmless: one repair attempt.
+                repair = self.llm.plan(self._system, build_repair_prompt(question, links, sql, str(exc)))
+                sql = next(str(c.args.get("sql", "")) for c in repair.calls if c.name == "run_sql")
                 step.input["sql"] = sql
-        step.error = None
+                result = self.tools.run_sql(sql)
+        except SQLBlocked as exc:
+            step.error = str(exc)
+            raise _StopPlan(STATUS_BLOCKED, f"That query was blocked: {exc}") from exc
+        except (SQLExecutionError, LLMError, StopIteration) as exc:
+            step.error = str(exc)
+            raise _StopPlan(STATUS_ERROR, "I could not produce a valid query for that question.") from exc
         step.columns = result.columns
         step.rows = result.rows
         step.truncated = result.truncated

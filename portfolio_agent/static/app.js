@@ -3,6 +3,15 @@
 // All data reaches the page through textContent, so database values can never run as HTML.
 const el = (id) => document.getElementById(id);
 
+const EXAMPLES = [
+  "What are the sector exposures for the Tech Innovation Fund?",
+  "How many portfolios do we have in total?",
+  "Show me the top 5 holdings by cost basis in the Growth Equity Fund",
+  "For each portfolio, show the total value of Technology sector holdings and what percentage it represents of the total portfolio value",
+  "Show the sector exposures of the largest portfolio by AUM",
+  "Should I buy NVDA right now?",
+];
+
 const ROUTE_LABELS = {
   cache: "Cached answer",
   fast_path: "Direct calculation, no model call",
@@ -169,11 +178,7 @@ el("ask-form").addEventListener("submit", (event) => {
 });
 
 async function start() {
-  const [examples, health] = await Promise.all([
-    fetch("/api/examples").then((r) => r.json()),
-    fetch("/api/health").then((r) => r.json()),
-  ]);
-  examples.forEach((question) => {
+  EXAMPLES.forEach((question) => {
     const chip = make("button", "", question);
     chip.type = "button";
     chip.title = question;
@@ -183,6 +188,7 @@ async function start() {
     });
     el("examples").append(chip);
   });
+  const health = await fetch("/api/health").then((r) => r.json());
   if (!health.model_configured) {
     const note = el("model-note");
     note.textContent = "No Gemini API key is configured here, so only direct sector exposure questions can be answered.";

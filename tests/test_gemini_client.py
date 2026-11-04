@@ -91,12 +91,6 @@ def test_text_reply_without_tool_call_is_an_error(client, monkeypatch):
         client.plan("s", "u")
 
 
-def test_thinking_setting_matches_each_model(client):
-    assert client._thinking("gemini-2.5-flash-lite").thinking_budget == 0
-    assert client._thinking("gemini-3.5-flash").thinking_level == types.ThinkingLevel.MINIMAL
-    assert client._thinking("gemini-3.8-flash").thinking_level == types.ThinkingLevel.LOW
-
-
 def test_slow_model_is_hedged_and_first_answer_wins(settings, monkeypatch):
     client = GeminiClient(dataclasses.replace(settings, gemini_api_key="k", llm_hedge_delay_s=0.05))
     release = threading.Event()

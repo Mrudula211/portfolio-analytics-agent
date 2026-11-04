@@ -25,8 +25,7 @@ def test_no_evaluation_question_or_query_in_prompts():
 
 def test_agent_code_does_not_read_or_embed_evaluation_answers():
     for path in (ROOT / "portfolio_agent").glob("*.py"):
-        # The scorer reads the answers by design; the API only offers example questions to people.
-        if path.name in {"evaluation.py", "api.py"}:
+        if path.name == "evaluation.py":  # The scorer reads the answers by design.
             continue
         source = _normalise(path.read_text(encoding="utf-8"))
         assert "ground_truth" not in source, path.name

@@ -110,6 +110,3 @@ def test_catalog_keeps_free_text_out_of_prompts(catalog):
     assert "status TEXT in {Active, Passive}" in catalog.render()
 
 
-def test_retrieval_includes_join_path(catalog):
-    tables = catalog.retrieve_tables("average price of securities in the Growth Equity Fund by sector")
-    assert {"portfolios", "holdings", "securities", "sectors"} <= set(tables)

@@ -6,3 +6,5 @@ __pycache__/
 portfolio_database.db
 portfolio_database.db.*
 *.pdf
+reports/*.json
+reports/self_test*
