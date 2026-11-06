@@ -184,8 +184,9 @@ function renderAbout(about) {
       [model.p50_ms ? formatMs(model.p50_ms) : "-", "median answer using the model"],
       [model.p95_ms ? formatMs(model.p95_ms) : "-", "95th percentile using the model"],
     ];
-    el("tiles").replaceChildren(...tiles.map(([value, label]) => {
-      const tile = make("div", "card tile");
+    el("tiles").replaceChildren(...tiles.map(([value, label], index) => {
+      const tile = make("div", "tile");
+      if (index === 0) tile.append(make("span", "tile-tag", "Live run"));
       tile.append(make("div", "tile-value", value), make("div", "tile-label", label));
       return tile;
     }));

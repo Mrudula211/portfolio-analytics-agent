@@ -14,16 +14,24 @@
       <span class="product">Portfolio Analytics Agent</span>
       <nav class="topnav" aria-label="Page">
         <a href="#about">How it's tested</a>
+        <a href="#speed">How it stays fast</a>
+        <a href="#data">What the data shows</a>
         <a href="/docs">API</a>
       </nav>
     </div>
   </header>
 
-  <main class="wrap">
-    <section class="hero">
+  <section class="hero">
+    <div class="wrap">
+      <p class="eyebrow">Portfolio analytics</p>
       <h1>Ask your portfolio data anything</h1>
-      <p>Holdings, risk, performance and sector exposure, in plain English. Every figure comes from the database, never from the model's memory.</p>
+      <p class="lede">Holdings, risk, performance and sector exposure, in plain English. Every figure comes from the database, never from the model's memory.</p>
+    </div>
+  </section>
 
+  <main class="wrap">
+    <section class="ask-card">
+      <p class="eyebrow">Ask a question</p>
       <form id="ask-form" class="ask" autocomplete="off">
         <label for="question" class="visually-hidden">Your question</label>
         <input id="question" name="question" type="text" maxlength="500" required
@@ -45,27 +53,36 @@
       <div id="content"></div>
     </section>
 
-    <section id="about" class="about" hidden>
-      <h2>How it's tested</h2>
+    <section id="about" class="section" hidden>
+      <p class="eyebrow">How it's tested</p>
+      <h2>Measured on 40 questions, not claimed</h2>
       <p id="eval-meta" class="muted"></p>
       <div id="tiles" class="tiles"></div>
       <div id="eval-table"></div>
+    </section>
 
-      <h2>How it stays fast</h2>
+    <section id="speed" class="section">
+      <p class="eyebrow">How it stays fast</p>
+      <h2>The cheapest correct path for every question</h2>
       <ol class="routes">
-        <li><strong>Repeat questions</strong> come from an exact-match cache.</li>
+        <li><strong>Repeat questions</strong> come from an exact-match cache, in under a millisecond.</li>
         <li><strong>Sector exposure for one named fund</strong> skips the model and runs the calculator directly.</li>
         <li><strong>Everything else</strong> costs one Gemini call that returns the whole plan. If a model is slow, a second starts after 2.5 s and the first answer wins. Code, not the model, writes the answer.</li>
       </ol>
-
-      <h2>What the data shows</h2>
-      <ul id="data-notes" class="data-notes"></ul>
     </section>
 
-    <footer class="footer">
-      An independent technical assessment for PL Capital, built on its sample dataset. Not a PL Capital product and not investment advice.
-    </footer>
+    <section id="data" class="section">
+      <p class="eyebrow">What the data shows</p>
+      <h2>Issues found in the sample data</h2>
+      <ul id="data-notes" class="data-notes"></ul>
+    </section>
   </main>
+
+  <footer class="footer">
+    <div class="wrap">
+      An independent technical assessment for PL Capital, built on its sample dataset. Not a PL Capital product and not investment advice.
+    </div>
+  </footer>
   <div id="tooltip" class="tooltip" role="status" hidden></div>
   <script src="/static/app.js"></script>
 </body>
