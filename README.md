@@ -98,7 +98,7 @@ The tail latency comes from free-tier congestion: about half the answers came fr
 
 | Measure | Result |
 | --- | --- |
-| Unit and integration tests | 106 passed |
+| Unit and integration tests | 107 passed |
 | Scorer self-test, 40 cases with reference plans replayed | 40 of 40 |
 | Sector exposure fast path, uncached, 300 runs | p50 2.7 ms, p95 4.3 ms |
 | Exact-repeat cache hit, 300 runs | p50 0.015 ms |
@@ -161,13 +161,7 @@ The response includes `status`, `answer`, `route`, `steps` (SQL, rows, exposures
 
 The container serves the UI and API from one process and contains its own database.
 
-**Hugging Face Spaces (recommended; free, 2 vCPU and 16 GB). A Space sleeps after a period without use, so open it once before sharing a link:**
-
-```bash
-pip install huggingface_hub
-hf auth login
-python scripts/deploy_hf_space.py your-username/portfolio-analytics-agent
-```
+**Render (free):** in the Render dashboard choose **New > Blueprint**, select this repository, and set `GEMINI_API_KEY`. Set `DEMO_PASSWORD` to require a password (any username) for everything except the health check. The free plan sleeps after about 15 idle minutes, so the first visit after a pause takes up to a minute.
 
 **Any container host:** `docker build -t portfolio-agent . && docker run -p 7860:7860 -e GEMINI_API_KEY=... portfolio-agent`
 
@@ -189,7 +183,7 @@ portfolio_agent/
   demo_plans.json Gemini's stored plans for the UI's example questions
 evaluate.py       evaluation command
 eval/             held-out questions
-scripts/          demo plans, deployment
+scripts/          stored demo plans
 reports/          latest live evaluation
 tests/            unit and integration tests
 ```

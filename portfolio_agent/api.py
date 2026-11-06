@@ -6,8 +6,10 @@ per-request state and opens a read-only connection per query, so requests do not
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
+import secrets
 import threading
 import time
 from collections import defaultdict, deque
@@ -28,7 +30,7 @@ STATIC = Path(__file__).parent / "static"
 DEMO_PLANS = Path(__file__).parent / "demo_plans.json"
 EVALUATION = ROOT / "reports" / "live_extended.json"
 _SECURITY_HEADERS = {
-    "Content-Security-Policy": "default-src 'self'; frame-ancestors https://huggingface.co",
+    "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
 }
@@ -61,6 +63,16 @@ class RateLimiter:
             return True
 
 
+def _authorized(request: Request, password: str) -> bool:
+    """HTTP Basic auth: the browser shows its own prompt; any username, shared password."""
+    scheme, _, encoded = request.headers.get("authorization", "").partition(" ")
+    try:
+        supplied = base64.b64decode(encoded).decode().partition(":")[2]
+    except ValueError:
+        return False
+    return scheme.lower() == "basic" and secrets.compare_digest(supplied.encode(), password.encode())
+
+
 def create_app(agent: PortfolioAgent | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -82,6 +94,9 @@ def create_app(agent: PortfolioAgent | None = None) -> FastAPI:
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
+        password = request.app.state.agent.settings.demo_password
+        if password and request.url.path != "/api/health" and not _authorized(request, password):
+            return Response("Password required.", 401, {"WWW-Authenticate": 'Basic realm="Portfolio Analytics Agent"'})
         response = await call_next(request)
         response.headers.update(_SECURITY_HEADERS)
         if request.url.path == "/docs":  # Swagger UI needs its CDN assets and inline start-up script.

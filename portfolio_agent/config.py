@@ -29,6 +29,7 @@ class Settings:
     max_question_chars: int = 500
     cache_size: int = 512
     rate_limit_per_minute: int = 20
+    demo_password: str = ""  # When set, the web app asks for it.
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -41,4 +42,5 @@ class Settings:
                 if m.strip()
             ),
             rate_limit_per_minute=int(os.getenv("RATE_LIMIT_PER_MINUTE", cls.rate_limit_per_minute)),
+            demo_password=os.getenv("DEMO_PASSWORD", ""),
         )

@@ -87,3 +87,18 @@ def test_stored_plan_answers_without_a_model_call(make_agent):
     agent.preload(question, [ToolCall("run_sql", {"sql": "SELECT SUM(total_aum) FROM portfolios WHERE target_risk_level = 'High'"})])
     reply = agent.answer_question(question)
     assert reply.route == "cache" and "85,000,000" in reply.answer and agent.llm.prompts == []
+
+
+def test_demo_password_protects_everything_but_health(settings, make_agent):
+    import base64
+    import dataclasses
+
+    agent = make_agent()
+    agent.settings = dataclasses.replace(settings, demo_password="s3cret")
+    with TestClient(create_app(agent)) as protected:
+        assert protected.get("/").status_code == 401
+        assert protected.get("/api/health").status_code == 200
+        wrong = {"Authorization": "Basic " + base64.b64encode(b"x:nope").decode()}
+        right = {"Authorization": "Basic " + base64.b64encode(b"reviewer:s3cret").decode()}
+        assert protected.get("/", headers=wrong).status_code == 401
+        assert protected.get("/", headers=right).status_code == 200
