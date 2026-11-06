@@ -15,6 +15,17 @@ Note: Recorded weights and market values disagree by up to 11.2 points; the reco
 
 Design decisions and trade-offs are in [docs/DESIGN.md](docs/DESIGN.md).
 
+## Requirements checklist
+
+| Requirement in the brief | Where | How to check it |
+| --- | --- | --- |
+| 1. SQL query tool: question to SQL | `run_sql` in [tools.py](portfolio_agent/tools.py), guarded by [sql_guard.py](portfolio_agent/sql_guard.py) | `python -m portfolio_agent --trace "How many portfolios do we have?"` prints the SQL and the answer, 13 |
+| 2. Exposure calculator: holding weights x sector, bonds excluded | `exposure_calculator` in [tools.py](portfolio_agent/tools.py) | `python -m portfolio_agent "Sector exposure of Conservative Income Fund"` shows 4 bonds excluded and equities summing to 100% |
+| 3. Command-line agent that chooses a tool | [agent.py](portfolio_agent/agent.py), [\_\_main\_\_.py](portfolio_agent/__main__.py) | `python -m portfolio_agent --trace "<question>"` shows the tool chosen. Tool choice was 100% correct in the live run |
+| 4. Evaluator: runs the ground truth and checks each answer | [evaluate.py](evaluate.py), [evaluation.py](portfolio_agent/evaluation.py) | `python evaluate.py` compares each answer with the reference query's results; without an API key, `python evaluate.py --self-test` checks the pipeline |
+
+Optional enhancements from the brief, also done: parameterised queries, query validation, graceful database errors, logging, input validation, caching, a graphical interface (a web UI rather than Streamlit; see [docs/DESIGN.md](docs/DESIGN.md)), a REST API, concurrent requests, scoring that favours efficient queries, and hybrid questions using both tools. RAG was measured and deliberately not used; the reasons are in [docs/DESIGN.md](docs/DESIGN.md).
+
 ## Run it
 
 Requires Python 3.12 or newer and a [Gemini API key](https://aistudio.google.com/apikey).
