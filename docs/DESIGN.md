@@ -73,9 +73,11 @@ Testing found a real bug here: an allow-list of table names also rejected `COUNT
 
 ## Evaluation integrity
 
-The worked examples in the prompt deliberately use other questions and tables than the evaluation sets, and a test enforces this. Two glossary entries were informed by reading the ground truth and are disclosed here: the definition of "diversification metrics", and the columns shown when listing holdings. They are reasonable house definitions that a real team would write down, but they do help Q5 and Q8. Removing them measures how the agent does without that help.
+The worked examples in the prompt deliberately use other questions and tables than the evaluation sets, and tests enforce this, both for prompts and for the UI's stored demo questions.
 
-If prompts are tuned against `eval/extended_dataset.json`, it stops being held out. A new set of unseen questions is then needed for an honest number.
+Two glossary entries were once written after reading the ground truth: the formula for "diversification metrics" (Q8) and the columns to show when listing holdings (Q5). They helped exactly those questions, which made the score partly a measure of the answer key. Both were removed, so nothing in the prompt now comes from the ground truth, even if that costs those two questions.
+
+The 30 extra questions in `eval/extended_dataset.json` were written before any tuning, but three fixes (x06, x08 and the percentage example) were made after seeing failures there. They are therefore no longer a blind test. An honest number from here needs new questions the agent has never been tuned on.
 
 ## Web UI: FastAPI with plain HTML, not Streamlit
 

@@ -1,5 +1,5 @@
 {
-  "description": "Held-out questions written for this project. They are never used in prompts. attack_sql is what a compromised model might emit; the self-test replays it so the guard is exercised without a model.",
+  "description": "Extra questions written for this project, never used in prompts. Some fixes were made after seeing failures here, so they are not a blind test. attack_sql is what a compromised model might emit; the self-test replays it so the guard is exercised without a model.",
   "questions": [
     {"id": "x01", "category": "paraphrase", "question": "What's the number of funds on our books?",
      "expect": {"kind": "sql", "sql": "SELECT COUNT(*) FROM portfolios"}},

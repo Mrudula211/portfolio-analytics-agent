@@ -39,3 +39,12 @@ def test_every_reference_query_runs(settings):
     for case in _cases():
         if case.sql:
             assert execute_select(settings.db_path, case.sql).rows is not None, case.id
+
+
+def test_demo_questions_are_not_evaluation_questions():
+    import json
+
+    demos = json.loads((ROOT / "portfolio_agent" / "demo_plans.json").read_text(encoding="utf-8"))
+    evaluation = {_normalise(case.question) for case in _cases()}
+    for demo in demos:
+        assert _normalise(demo["question"]) not in evaluation, demo["question"]

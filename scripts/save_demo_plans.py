@@ -19,16 +19,14 @@ from portfolio_agent import PortfolioAgent  # noqa: E402
 from portfolio_agent.api import DEMO_PLANS  # noqa: E402
 from portfolio_agent.prompts import build_user_prompt  # noqa: E402
 
+# None of these are evaluation questions; tests/test_no_leakage.py enforces it.
 QUESTIONS = [
-    "What are the sector exposures for the Tech Innovation Fund?",
-    "How many portfolios do we have in total?",
-    "Show me the top 5 holdings by cost basis in the Growth Equity Fund",
-    (
-        "For each portfolio, show the total value of Technology sector holdings"
-        " and what percentage it represents of the total portfolio value"
-    ),
-    "Show the sector exposures of the largest portfolio by AUM",
-    "Should I buy NVDA right now?",
+    "Sector breakdown for the Balanced Portfolio",
+    "Which portfolio has the largest AUM?",
+    "Top 3 holdings by market value in the Small Cap Value Fund",
+    "Average Sharpe ratio of each portfolio over the period",
+    "Show sector exposures for all high risk portfolios",
+    "Will NVIDIA's price go up next week?",
 ]
 
 

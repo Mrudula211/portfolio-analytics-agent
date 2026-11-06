@@ -2,6 +2,14 @@
 
 Ask questions about portfolio data in plain English. The agent writes and safely runs SQL, calculates sector exposures, or combines the two, and it is built to answer quickly without letting a language model state a number.
 
+**At a glance**
+
+- **All four required parts are built:** SQL tool, exposure calculator, command-line agent and evaluator. A web UI and REST API come on top.
+- **On the brief's 10 questions (live run):** 8 fully correct, 1 partly correct (Q5) and 1 unscored because the model timed out (Q7).
+- **Across all 40 questions** (the 10 in the brief plus 30 more I wrote): 94.9% strict accuracy on the 39 scored, and the right tool chosen every time.
+- **Speed:** a median of 1.9 s when Gemini is needed, about 7 ms for sector exposure (which skips the model), and under 1 ms for repeat questions.
+- **Every failure and caveat is listed** under [Results](#results).
+
 ```text
 > Calculate the sector exposure breakdown for international equity
 Sector exposure: International Equity Fund
@@ -29,7 +37,7 @@ Design decisions and trade-offs are in [docs/DESIGN.md](docs/DESIGN.md).
 | Working agent on the command line | `python -m portfolio_agent "<question>"`, or no question for an interactive prompt |
 | Evaluation script against the ground truth | `python evaluate.py`; results in [reports/live_extended.md](reports/live_extended.md) |
 | Brief documentation with a design diagram | This README (diagram under "How it works") and [docs/DESIGN.md](docs/DESIGN.md) |
-| Clean code with error handling | 107 tests and the `ruff` linter run in CI on every push; database, model and input errors become plain messages instead of crashes |
+| Clean code with error handling | 108 tests and the `ruff` linter run in CI on every push; database, model and input errors become plain messages instead of crashes |
 
 Optional enhancements from the brief, also done: parameterised queries, query validation, graceful database errors, logging, input validation, caching, a graphical interface (a web UI rather than Streamlit; see [docs/DESIGN.md](docs/DESIGN.md)), a REST API, concurrent requests, scoring that favours efficient queries, and hybrid questions using both tools. RAG was measured and deliberately not used; the reasons are in [docs/DESIGN.md](docs/DESIGN.md).
 
@@ -50,7 +58,7 @@ cp .env.example .env               # then set GEMINI_API_KEY
 | Interactive prompt | `python -m portfolio_agent` |
 | See SQL, route and timings | add `--trace` |
 | Evaluate on the ground truth | `python evaluate.py` |
-| Add held-out, hybrid and safety cases | `python evaluate.py --extended` |
+| Add the 30 extra cases: hybrid, safety, edge cases | `python evaluate.py --extended` |
 | Check everything except the model, no key needed | `python evaluate.py --self-test --extended` |
 | Web UI and REST API | `uvicorn portfolio_agent.api:app`, then open http://127.0.0.1:8000 |
 | Unit tests | `pytest` |
@@ -92,7 +100,7 @@ Latency comes from what the system avoids:
 
 ### Live model accuracy and latency
 
-From `reports/live_extended.md`: 40 questions (the 10 in the brief plus 30 held-out), Gemini free tier, cache off, run on 6 November 2026.
+From `reports/live_extended.md`: 40 questions (the 10 in the brief plus 30 I wrote), Gemini free tier, cache off, run once on 6 November 2026.
 
 | Measure | Result |
 | --- | --- |
@@ -112,11 +120,17 @@ What did not pass, in full:
 
 The tail latency comes from free-tier congestion: about half the answers came from the fallback model after the primary passed 2.5 s.
 
+**Changes since this run, not yet measured live.** These were made after seeing the results above, so the 30 extra questions are no longer a blind test:
+
+- Fixed x06 (the Sharpe ratio bug) and the "Apple" name matching.
+- Added a worked example for percentage questions, which affects the style of Q7.
+- Removed two glossary entries that had been written after reading the ground truth: the formula for "diversification metrics" (Q8) and the columns to show when listing holdings (Q5). No prompt content now comes from the ground truth. This may lower the scores on Q5 and Q8, and an honest lower score is the point.
+
 ### Measured without the model
 
 | Measure | Result |
 | --- | --- |
-| Unit and integration tests | 107 passed |
+| Unit and integration tests | 108 passed |
 | Scorer self-test, 40 cases with reference plans replayed | 40 of 40 |
 | Sector exposure fast path, uncached, 300 runs | p50 2.7 ms, p95 4.3 ms |
 | Exact-repeat cache hit, 300 runs | p50 0.015 ms |
@@ -200,7 +214,7 @@ portfolio_agent/
   api.py, static/ REST API and web UI
   demo_plans.json Gemini's stored plans for the UI's example questions
 evaluate.py       evaluation command
-eval/             held-out questions
+eval/             the 30 extra evaluation questions
 scripts/          stored demo plans
 reports/          latest live evaluation
 tests/            unit and integration tests
