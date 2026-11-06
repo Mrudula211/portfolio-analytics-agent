@@ -9,7 +9,7 @@
 }
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --royal: #0000a0;
   --navy: #0f0f83;
   --hero: #001a66;
@@ -30,30 +30,6 @@
   --code: #f3f3fa;
   --warn-bg: #fdf6e7;
   --warn-ink: #6d4c00;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --royal: #8c8cff;
-    --navy: #c3c3ff;
-    --lavender: #1c1f3d;
-    --lavender-2: #1a1c33;
-    --green: #4cc97d;
-    --teal: #54b8b0;
-    --page: #0b0c18;
-    --surface: #13152a;
-    --ink: #eceef8;
-    --ink-2: #b4b8cf;
-    --ink-3: #8d91aa;
-    --line: #2a2d47;
-    --pill: #23264a;
-    --pill-line: #3a3e6a;
-    --bar: #6b7cf0;
-    --track: #22253f;
-    --code: #1b1e36;
-    --warn-bg: #2c2513;
-    --warn-ink: #eccb7c;
-  }
 }
 
 * { box-sizing: border-box; }
@@ -127,10 +103,6 @@ body {
   cursor: pointer;
 }
 
-@media (prefers-color-scheme: dark) {
-  .ask button { color: #0b0c18; }
-}
-
 .ask button:disabled { opacity: 0.65; cursor: wait; }
 :focus-visible { outline: 2px solid var(--royal); outline-offset: 2px; }
 
@@ -166,10 +138,6 @@ body {
 .route[data-route="fast_path"] { background: var(--teal); color: #fff; }
 .route[data-route="model"] { background: var(--royal); color: #fff; }
 .route:empty { display: none; }
-
-@media (prefers-color-scheme: dark) {
-  .route[data-route="fast_path"], .route[data-route="model"] { color: #0b0c18; }
-}
 
 .latency { font-weight: 700; font-variant-numeric: tabular-nums; }
 .breakdown { color: var(--ink-3); font-variant-numeric: tabular-nums; }
