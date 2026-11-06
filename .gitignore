@@ -7,4 +7,5 @@ portfolio_database.db
 portfolio_database.db.*
 *.pdf
 reports/*.json
+!reports/live_extended.json
 reports/self_test*

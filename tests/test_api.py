@@ -70,3 +70,20 @@ def test_concurrent_requests_succeed(client):
 
     with ThreadPoolExecutor(max_workers=16) as pool:
         assert set(pool.map(call, range(100))) == {"ok"}
+
+
+def test_about_lists_examples_data_notes_and_evaluation(client):
+    about = client.get("/api/about").json()
+    assert about["examples"] and about["model_configured"] is True
+    assert any("98" in note for note in about["data_notes"])
+    assert "evaluation" in about
+
+
+def test_stored_plan_answers_without_a_model_call(make_agent):
+    from portfolio_agent.llm import ToolCall
+
+    agent = make_agent()
+    question = "Total AUM of the high risk funds"
+    agent.preload(question, [ToolCall("run_sql", {"sql": "SELECT SUM(total_aum) FROM portfolios WHERE target_risk_level = 'High'"})])
+    reply = agent.answer_question(question)
+    assert reply.route == "cache" and "85,000,000" in reply.answer and agent.llm.prompts == []

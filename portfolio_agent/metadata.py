@@ -47,6 +47,8 @@ diversification_ratio = sector count / total holdings. Only Stock rows have a se
 - portfolio_performance and risk_metrics are daily series for only some portfolios. A question about the \
 current or latest figure must filter to the latest date for that portfolio, never mix dates or average them \
 unless asked.
+- portfolio_performance holds NAV, returns, volatility, Sharpe ratio and max drawdown. risk_metrics holds VaR, \
+CVaR, beta, correlation, tracking error, information ratio and Sortino ratio.
 - "holdings" listings show holding_id, symbol, company_name, quantity and the requested metric."""
 
 _GENERIC_NAME_TOKENS = frozenset(

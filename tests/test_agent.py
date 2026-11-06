@@ -189,3 +189,21 @@ def test_concurrent_questions_all_answer_correctly(make_agent):
     assert errors == []
 
 
+
+
+def test_repair_can_decline_instead_of_substituting_a_metric(make_agent):
+    question = "Highest Sharpe ratio in risk metrics?"
+    agent = make_agent({question: [sql_call("SELECT sharpe_ratio FROM risk_metrics")]})
+    agent.llm.repairs = []
+    original = agent.llm.plan
+
+    def plan(system, prompt):
+        if "<failed_sql>" in prompt:
+            from portfolio_agent.llm import LLMResponse
+
+            return LLMResponse([ToolCall("decline", {"kind": "no_data", "message": "Not in risk_metrics."})], "scripted")
+        return original(system, prompt)
+
+    agent.llm.plan = plan
+    reply = agent.answer_question(question)
+    assert reply.status == "declined" and reply.answer == "Not in risk_metrics."

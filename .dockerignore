@@ -8,6 +8,5 @@ __pycache__
 *.db
 tests
 eval
-reports
 docs
 scripts

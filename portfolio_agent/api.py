@@ -6,6 +6,7 @@ per-request state and opens a read-only connection per query, so requests do not
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 import time
@@ -19,8 +20,13 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .agent import PortfolioAgent
+from .config import ROOT
+from .db import data_quality_findings
+from .llm import ToolCall
 
 STATIC = Path(__file__).parent / "static"
+DEMO_PLANS = Path(__file__).parent / "demo_plans.json"
+EVALUATION = ROOT / "reports" / "live_extended.json"
 _SECURITY_HEADERS = {
     "Content-Security-Policy": "default-src 'self'; frame-ancestors https://huggingface.co",
     "X-Content-Type-Options": "nosniff",
@@ -61,6 +67,15 @@ def create_app(agent: PortfolioAgent | None = None) -> FastAPI:
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
         app.state.agent = agent or PortfolioAgent()
         app.state.limiter = RateLimiter(app.state.agent.settings.rate_limit_per_minute)
+        demos = json.loads(DEMO_PLANS.read_text(encoding="utf-8"))
+        for demo in demos:
+            app.state.agent.preload(demo["question"], [ToolCall(**c) for c in demo["calls"]])
+        report = json.loads(EVALUATION.read_text(encoding="utf-8")) if EVALUATION.exists() else None
+        app.state.about = {
+            "examples": [demo["question"] for demo in demos],
+            "data_notes": data_quality_findings(app.state.agent.settings.db_path),
+            "evaluation": {"meta": report["meta"], "summary": report["summary"]} if report else None,
+        }
         yield
 
     app = FastAPI(title="Portfolio Analytics Agent", lifespan=lifespan)
@@ -83,6 +98,10 @@ def create_app(agent: PortfolioAgent | None = None) -> FastAPI:
     @app.get("/api/health")
     def health(request: Request) -> dict:
         return {"status": "ok", "model_configured": request.app.state.agent.llm is not None}
+
+    @app.get("/api/about")
+    def about(request: Request) -> dict:
+        return {**request.app.state.about, "model_configured": request.app.state.agent.llm is not None}
 
     @app.get("/", include_in_schema=False)
     def index() -> FileResponse:

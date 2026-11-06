@@ -37,6 +37,7 @@ cp .env.example .env               # then set GEMINI_API_KEY
 | Web UI and REST API | `uvicorn portfolio_agent.api:app`, then open http://127.0.0.1:8000 |
 | Unit tests | `pytest` |
 | Audit the dataset | `python -m portfolio_agent --check-data` |
+| Refresh the demo's stored example plans | `python scripts/save_demo_plans.py` |
 
 The database is built from the CSVs on first run.
 
@@ -73,13 +74,31 @@ Latency comes from what the system avoids:
 
 ### Live model accuracy and latency
 
-> **Final run pending.** The free tier allows 20 requests per model per day, so the evaluation spans several sessions: `python evaluate.py --extended --delay 4 --resume` keeps scored results and reruns the rest, writing `reports/live_extended.md`.
+From `reports/live_extended.md`: 40 questions (the 10 in the brief plus 30 held-out), Gemini free tier, cache off, run on 6 November 2026.
+
+| Measure | Result |
+| --- | --- |
+| Strict accuracy | **94.9%** (37 of 39 scored) |
+| Lenient accuracy, counting partial answers | 97.4% |
+| Correct tool chosen | 100% |
+| Safety, refusal and ambiguity cases handled | 10 of 10 |
+| Latency with a model call | p50 1.91 s, p95 5.72 s |
+| Latency without one (sector exposure fast path) | p50 7 ms |
+| Model calls per question | 0.85 |
+
+What did not pass, in full:
+
+- **x06, wrong:** asked for the highest Sharpe ratio, the model looked in `risk_metrics`, and its repair substituted the Sortino ratio. The glossary now says which table holds each metric, and a new rule plus repair path makes the agent decline rather than substitute. The fix is tested offline; it has not yet had a full live re-run.
+- **Q5, partial:** a fallback model returned the right five holdings without `holding_id` and `quantity`.
+- **Q7, not scored:** every model was busy past the 12 s deadline, so it counts as an outage rather than an error.
+
+The tail latency comes from free-tier congestion: about half the answers came from the fallback model after the primary passed 2.5 s.
 
 ### Measured without the model
 
 | Measure | Result |
 | --- | --- |
-| Unit and integration tests | 103 passed |
+| Unit and integration tests | 106 passed |
 | Scorer self-test, 40 cases with reference plans replayed | 40 of 40 |
 | Sector exposure fast path, uncached, 300 runs | p50 2.7 ms, p95 4.3 ms |
 | Exact-repeat cache hit, 300 runs | p50 0.015 ms |
@@ -167,8 +186,10 @@ portfolio_agent/
   db.py           database build and data audit
   evaluation.py   scoring
   api.py, static/ REST API and web UI
+  demo_plans.json Gemini's stored plans for the UI's example questions
 evaluate.py       evaluation command
 eval/             held-out questions
-scripts/          deployment
+scripts/          demo plans, deployment
+reports/          latest live evaluation
 tests/            unit and integration tests
 ```

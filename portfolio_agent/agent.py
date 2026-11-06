@@ -106,6 +106,20 @@ class PortfolioAgent:
             log.warning("llm_disabled reason=no_api_key")
             return None
 
+    def preload(self, question: str, calls: list[ToolCall]) -> None:
+        """Cache the answer to a demo question from a stored plan, so it costs no model call.
+
+        The plan, not the answer, is stored: it runs against the current data at start-up.
+        """
+        plan = LLMResponse(calls, "stored plan") if calls else None
+        links = self.linker.link(question)
+        if plan is None:
+            reply = self.answer_question(question)
+        else:
+            reply = self._answer_with_calls(question, links, plan, route="model")
+            if reply.status in {STATUS_OK, STATUS_DECLINED}:
+                self.cache.put(normalize_question(question), reply)
+
     def answer_question(self, question: str, *, use_cache: bool = True) -> AgentResponse:
         started = time.perf_counter()
         request_id = uuid.uuid4().hex[:12]
@@ -231,6 +245,10 @@ class PortfolioAgent:
                 result = self.tools.run_sql(sql)
             except SQLExecutionError as exc:  # Invalid but harmless: one repair attempt.
                 repair = self.llm.plan(self._system, build_repair_prompt(question, links, sql, str(exc)))
+                declined = next((c for c in repair.calls if c.name == "decline"), None)
+                if declined is not None:  # The data does not hold what was asked; better than a substitute.
+                    step.error = str(exc)
+                    raise _StopPlan(STATUS_DECLINED, str(declined.args.get("message", "")) or "That isn't in this data.")
                 sql = next(str(c.args.get("sql", "")) for c in repair.calls if c.name == "run_sql")
                 step.input["sql"] = sql
                 result = self.tools.run_sql(sql)

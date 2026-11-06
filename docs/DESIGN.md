@@ -81,6 +81,12 @@ If prompts are tuned against `eval/extended_dataset.json`, it stops being held o
 
 Streamlit was suggested and would have been quicker to write. A static page on the API needs no second service, adds no per-interaction server re-run, and lets the page apply a strict Content Security Policy. The cost is more hand-written front-end code.
 
+The page follows plindia.com's palette (royal blue, navy, teal) and its Figtree typeface, self-hosted so the security policy can stay strict. It also shows the live evaluation results and the data findings, so a reviewer sees how the agent is tested without opening the repository.
+
+## Stored plans for demo questions
+
+The free tier allows 20 requests per model per day, which a few curious visitors could exhaust. The example questions in the UI therefore use plans Gemini produced once (`scripts/save_demo_plans.py`). The plan, not the answer, is stored: it runs against the database at start-up, so figures always come from the current data. These answers are labelled "Cached", and evaluation never uses them.
+
 ## SQLite file, not in-memory
 
 The brief mentions both. A read-only file gives every request an independent connection, with no shared-cache locking to manage, and adds file-level write protection. Opening it takes well under the latency that matters here.

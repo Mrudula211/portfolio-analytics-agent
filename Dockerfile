@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY portfolio_agent portfolio_agent
 COPY data data
 COPY database_schema.sql .
+COPY reports reports
 
 # Build the database into the image: fast start-up, and the running app only reads it.
 RUN python -c "from portfolio_agent.config import Settings; from portfolio_agent.db import build_database; build_database(Settings())"

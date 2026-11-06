@@ -30,7 +30,7 @@ pinned: false
 
 Natural-language analytics over a sample portfolio dataset. Not investment advice.
 """
-UPLOAD = ["portfolio_agent/**", "data/**", "database_schema.sql", "requirements.txt", "Dockerfile", ".dockerignore"]
+UPLOAD = ["portfolio_agent/**", "data/**", "reports/live_extended.json", "database_schema.sql", "requirements.txt", "Dockerfile", ".dockerignore"]
 
 
 def main() -> None:
