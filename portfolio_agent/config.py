@@ -32,7 +32,7 @@ class Settings:
     demo_password: str = ""  # When set, the web app asks for it.
 
     @classmethod
-    def from_env(cls) -> "Settings":
+    def from_env(cls) -> Settings:
         return cls(
             gemini_api_key=os.getenv("GEMINI_API_KEY", "").strip(),
             gemini_model=os.getenv("GEMINI_MODEL", cls.gemini_model),

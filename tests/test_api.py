@@ -84,7 +84,10 @@ def test_stored_plan_answers_without_a_model_call(make_agent):
 
     agent = make_agent()
     question = "Total AUM of the high risk funds"
-    agent.preload(question, [ToolCall("run_sql", {"sql": "SELECT SUM(total_aum) FROM portfolios WHERE target_risk_level = 'High'"})])
+    agent.preload(
+        question,
+        [ToolCall("run_sql", {"sql": "SELECT SUM(total_aum) FROM portfolios WHERE target_risk_level = 'High'"})],
+    )
     reply = agent.answer_question(question)
     assert reply.route == "cache" and "85,000,000" in reply.answer and agent.llm.prompts == []
 

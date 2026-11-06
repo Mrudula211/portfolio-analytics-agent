@@ -14,7 +14,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from portfolio_agent import PortfolioAgent
 from portfolio_agent.config import ROOT, Settings
@@ -67,19 +67,22 @@ def main() -> int:
     finished = load_finished(ROOT / "reports" / f"{name}.json") if args.resume else []
     done = {r.id for r in finished}
     remaining = [c for c in cases if c.id not in done]
-    results = finished + Evaluator(agent, settings.data_dir).run(remaining, runs=args.runs, delay_s=args.delay, on_result=show)
+    results = finished + Evaluator(agent, settings.data_dir).run(
+        remaining, runs=args.runs, delay_s=args.delay, on_result=show
+    )
     order = {c.id: i for i, c in enumerate(cases)}
     results.sort(key=lambda r: order[r.id])
     summary = summarize(results)
 
     meta = {
-        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        "date": datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
         "mode": "SELF-TEST: reference plans replayed, not model accuracy" if args.self_test else "live model",
         "dataset": "ground truth + extended" if args.extended else "ground truth",
     }
     path = write_report(results, summary, meta, ROOT / "reports", name)
 
-    print(f"\nStrict accuracy: {summary['strict_accuracy']:.1%}  ({summary['cases_scored']} scored, {summary['infra_errors']} infra errors)")
+    scored = f"{summary['cases_scored']} scored, {summary['infra_errors']} infra errors"
+    print(f"\nStrict accuracy: {summary['strict_accuracy']:.1%}  ({scored})")
     print(f"Lenient:         {summary['lenient_accuracy']:.1%}")
     print(f"Tool selection:  {summary['tool_selection_accuracy']:.1%}")
     print(f"SQL efficiency:  {summary['performance_adjusted_sql_score']}")

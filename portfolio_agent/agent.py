@@ -1,8 +1,8 @@
 """The agent: route a question through the cheapest path that can answer it correctly.
 
-    cache hit          exact repeat                      no model, no database
-    fast path          "sector exposure of <one fund>"   no model
-    model plan         everything else                   one call; a second only to repair SQL
+cache hit          exact repeat                      no model, no database
+fast path          "sector exposure of <one fund>"   no model
+model plan         everything else                   one call; a second only to repair SQL
 """
 
 from __future__ import annotations
@@ -248,7 +248,8 @@ class PortfolioAgent:
                 declined = next((c for c in repair.calls if c.name == "decline"), None)
                 if declined is not None:  # The data does not hold what was asked; better than a substitute.
                     step.error = str(exc)
-                    raise _StopPlan(STATUS_DECLINED, str(declined.args.get("message", "")) or "That isn't in this data.")
+                    message = str(declined.args.get("message", "")) or "That isn't in this data."
+                    raise _StopPlan(STATUS_DECLINED, message) from exc
                 sql = next(str(c.args.get("sql", "")) for c in repair.calls if c.name == "run_sql")
                 step.input["sql"] = sql
                 result = self.tools.run_sql(sql)

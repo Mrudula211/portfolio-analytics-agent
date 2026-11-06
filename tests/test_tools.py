@@ -108,5 +108,3 @@ def test_linker_finds_securities(catalog, question, expected):
 def test_catalog_keeps_free_text_out_of_prompts(catalog):
     assert "Initial purchase" not in catalog.render()
     assert "status TEXT in {Active, Passive}" in catalog.render()
-
-

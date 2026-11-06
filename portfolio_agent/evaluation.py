@@ -13,9 +13,9 @@ import re
 import statistics
 import time
 from collections import Counter, defaultdict
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Callable
 
 from .agent import AgentResponse, PortfolioAgent, Step
 from .llm import ToolCall
@@ -59,7 +59,7 @@ def _unmatched(expected: list, actual: list) -> tuple[list, list]:
     for item in expected:
         for index, candidate in enumerate(remaining):
             same = (
-                all(values_match(x, y) for x, y in zip(item, candidate))
+                all(values_match(x, y) for x, y in zip(item, candidate, strict=False))
                 if isinstance(item, list)
                 else values_match(item, candidate)
             )
@@ -79,8 +79,8 @@ def _find_mapping(want: list[list], have: list[list], ordered: bool) -> tuple[li
     """
     if not want or not want[0]:
         return None
-    want_columns = list(zip(*want))
-    have_columns = list(zip(*have)) if have else []
+    want_columns = list(zip(*want, strict=False))
+    have_columns = list(zip(*have, strict=False)) if have else []
     options = [
         [j for j, column in enumerate(have_columns) if not _unmatched(list(target), list(column))[0]]
         for target in want_columns
@@ -94,7 +94,8 @@ def _find_mapping(want: list[list], have: list[list], ordered: bool) -> tuple[li
             if missing:
                 return None
             if ordered and not all(
-                all(values_match(x, y) for x, y in zip(w, p)) for w, p in zip(want, projected)
+                all(values_match(x, y) for x, y in zip(w, p, strict=False))
+                for w, p in zip(want, projected, strict=False)
             ):
                 return None
             return extra
@@ -195,11 +196,26 @@ def load_ground_truth(path: Path) -> list[Case]:
     for item in json.loads(path.read_text(encoding="utf-8"))["questions"]:
         truth = item["ground_truth"]
         if item["type"] == "text2sql":
-            cases.append(Case(f"gt{item['id']:02d}", "ground_truth", item["difficulty"], item["question"], "sql", truth["sql_query"]))
+            cases.append(
+                Case(
+                    f"gt{item['id']:02d}",
+                    "ground_truth",
+                    item["difficulty"],
+                    item["question"],
+                    "sql",
+                    truth["sql_query"],
+                )
+            )
         else:
             cases.append(
-                Case(f"gt{item['id']:02d}", "ground_truth", item["difficulty"], item["question"], "exposure",
-                     portfolios=[truth["parameters"]["portfolio_name"]])
+                Case(
+                    f"gt{item['id']:02d}",
+                    "ground_truth",
+                    item["difficulty"],
+                    item["question"],
+                    "exposure",
+                    portfolios=[truth["parameters"]["portfolio_name"]],
+                )
             )
     return cases
 
@@ -209,8 +225,16 @@ def load_extended(path: Path) -> list[Case]:
     for item in json.loads(path.read_text(encoding="utf-8"))["questions"]:
         expect = item["expect"]
         cases.append(
-            Case(item["id"], item["category"], item.get("difficulty", "-"), item["question"], expect["kind"],
-                 expect.get("sql"), expect.get("portfolios", []), item.get("attack_sql"))
+            Case(
+                item["id"],
+                item["category"],
+                item.get("difficulty", "-"),
+                item["question"],
+                expect["kind"],
+                expect.get("sql"),
+                expect.get("portfolios", []),
+                item.get("attack_sql"),
+            )
         )
     return cases
 
@@ -299,9 +323,20 @@ class Evaluator:
         steps = _sql_steps(reply)
         sql = steps[-1].input["sql"] if steps else None
         result = CaseResult(
-            case.id, case.category, case.difficulty, case.question, verdict, detail, tool_correct,
-            reply.route, reply.status, reply.timings_ms.get("total", 0.0), reply.timings_ms.get("llm", 0.0),
-            reply.llm.get("calls", 0), reply.llm.get("model", "") or "", sql,
+            case.id,
+            case.category,
+            case.difficulty,
+            case.question,
+            verdict,
+            detail,
+            tool_correct,
+            reply.route,
+            reply.status,
+            reply.timings_ms.get("total", 0.0),
+            reply.timings_ms.get("llm", 0.0),
+            reply.llm.get("calls", 0),
+            reply.llm.get("model", "") or "",
+            sql,
         )
         if steps and case.sql:
             result.vm_steps = steps[-1].vm_steps
@@ -311,8 +346,14 @@ class Evaluator:
                 result.efficiency = round(min(1.0, result.reference_vm_steps / result.vm_steps), 3)
         return result
 
-    def run(self, cases: list[Case], *, runs: int = 1, delay_s: float = 0.0,
-            on_result: Callable[[CaseResult], None] | None = None) -> list[CaseResult]:
+    def run(
+        self,
+        cases: list[Case],
+        *,
+        runs: int = 1,
+        delay_s: float = 0.0,
+        on_result: Callable[[CaseResult], None] | None = None,
+    ) -> list[CaseResult]:
         results = []
         for _ in range(runs):
             for case in cases:
@@ -376,7 +417,9 @@ def oracle_script(cases: list[Case]) -> dict[str, list[ToolCall]]:
         if case.kind == "sql":
             calls = [ToolCall("run_sql", {"sql": case.sql, "title": ""})]
         elif case.kind == "exposure":
-            calls = [ToolCall("exposure_calculator", {"portfolio_names": case.portfolios, "use_previous_sql_result": False})]
+            calls = [
+                ToolCall("exposure_calculator", {"portfolio_names": case.portfolios, "use_previous_sql_result": False})
+            ]
         elif case.kind == "hybrid":
             calls = [
                 ToolCall("run_sql", {"sql": case.sql, "title": ""}),

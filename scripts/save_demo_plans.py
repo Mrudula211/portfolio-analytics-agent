@@ -23,7 +23,10 @@ QUESTIONS = [
     "What are the sector exposures for the Tech Innovation Fund?",
     "How many portfolios do we have in total?",
     "Show me the top 5 holdings by cost basis in the Growth Equity Fund",
-    "For each portfolio, show the total value of Technology sector holdings and what percentage it represents of the total portfolio value",
+    (
+        "For each portfolio, show the total value of Technology sector holdings"
+        " and what percentage it represents of the total portfolio value"
+    ),
     "Show the sector exposures of the largest portfolio by AUM",
     "Should I buy NVDA right now?",
 ]

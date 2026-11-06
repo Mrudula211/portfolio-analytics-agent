@@ -52,9 +52,24 @@ CVaR, beta, correlation, tracking error, information ratio and Sortino ratio.
 - "holdings" listings show holding_id, symbol, company_name, quantity and the requested metric."""
 
 _GENERIC_NAME_TOKENS = frozenset(
-    "fund portfolio index total market plus the stock bond equity value cap small income".split()
+    [
+        "fund",
+        "portfolio",
+        "index",
+        "total",
+        "market",
+        "plus",
+        "the",
+        "stock",
+        "bond",
+        "equity",
+        "value",
+        "cap",
+        "small",
+        "income",
+    ]
 )
-_COMPANY_SUFFIXES = frozenset("inc corp corporation co company plc ltd the com".split())
+_COMPANY_SUFFIXES = frozenset(["inc", "corp", "corporation", "co", "company", "plc", "ltd", "the", "com"])
 _SECTOR_ALIASES = {
     "tech": "Technology",
     "financial": "Financials",
@@ -127,12 +142,12 @@ class EntityLinker:
                         covered[i] = True
                     if name not in links.portfolios:
                         links.portfolios.append(name)
-        open_words = {w for w, used in zip(words, covered) if not used} - _GENERIC_NAME_TOKENS
+        open_words = {w for w, used in zip(words, covered, strict=False) if not used} - _GENERIC_NAME_TOKENS
         for alias, name in self._aliases:
             if open_words & set(alias) and name not in links.portfolios and name not in links.candidates:
                 links.candidates.append(name)
         # Only words outside portfolio names count, so "Tech Innovation Fund" is not a sector.
-        free_text = " ".join("|" if used else word for word, used in zip(words, covered))
+        free_text = " ".join("|" if used else word for word, used in zip(words, covered, strict=False))
         for key, sector in self._sector_map.items():
             if re.search(rf"\b{re.escape(key)}\b", free_text) and sector not in links.sectors:
                 links.sectors.append(sector)
@@ -170,6 +185,7 @@ class SchemaCatalog:
             ]
         finally:
             conn.close()
+
     @staticmethod
     def _card(conn, table: str) -> str:
         parts = []

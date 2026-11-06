@@ -24,6 +24,13 @@ Design decisions and trade-offs are in [docs/DESIGN.md](docs/DESIGN.md).
 | 3. Command-line agent that chooses a tool | [agent.py](portfolio_agent/agent.py), [\_\_main\_\_.py](portfolio_agent/__main__.py) | `python -m portfolio_agent --trace "<question>"` shows the tool chosen. Tool choice was 100% correct in the live run |
 | 4. Evaluator: runs the ground truth and checks each answer | [evaluate.py](evaluate.py), [evaluation.py](portfolio_agent/evaluation.py) | `python evaluate.py` compares each answer with the reference query's results; without an API key, `python evaluate.py --self-test` checks the pipeline |
 
+| Deliverable | Where |
+| --- | --- |
+| Working agent on the command line | `python -m portfolio_agent "<question>"`, or no question for an interactive prompt |
+| Evaluation script against the ground truth | `python evaluate.py`; results in [reports/live_extended.md](reports/live_extended.md) |
+| Brief documentation with a design diagram | This README (diagram under "How it works") and [docs/DESIGN.md](docs/DESIGN.md) |
+| Clean code with error handling | 107 tests and the `ruff` linter run in CI on every push; database, model and input errors become plain messages instead of crashes |
+
 Optional enhancements from the brief, also done: parameterised queries, query validation, graceful database errors, logging, input validation, caching, a graphical interface (a web UI rather than Streamlit; see [docs/DESIGN.md](docs/DESIGN.md)), a REST API, concurrent requests, scoring that favours efficient queries, and hybrid questions using both tools. RAG was measured and deliberately not used; the reasons are in [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Run it

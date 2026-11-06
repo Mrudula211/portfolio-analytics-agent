@@ -83,5 +83,6 @@ def build_repair_prompt(question: str, links: Links, failed_sql: str, error: str
     """A fresh, stateless prompt: only the database's error text goes back, never result data."""
     return (
         f"{build_user_prompt(question, links)}\n<failed_sql>{failed_sql}</failed_sql>\n"
-        f"<database_error>{error}</database_error>\nCall run_sql with a corrected query for the same question, or decline if the data does not hold it."
+        f"<database_error>{error}</database_error>\n"
+        "Call run_sql with a corrected query for the same question, or decline if the data does not hold it."
     )

@@ -12,7 +12,9 @@ def _normalise(text: str) -> str:
 
 
 def _cases():
-    return load_ground_truth(ROOT / "ground_truth_dataset.json") + load_extended(ROOT / "eval" / "extended_dataset.json")
+    return load_ground_truth(ROOT / "ground_truth_dataset.json") + load_extended(
+        ROOT / "eval" / "extended_dataset.json"
+    )
 
 
 def test_no_evaluation_question_or_query_in_prompts():

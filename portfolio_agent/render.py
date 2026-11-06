@@ -36,9 +36,12 @@ def format_value(value, column: str = "") -> str:
 
 
 def _table(columns: list[str], rows: list[list]) -> str:
-    cells = [[format_value(v, c) for v, c in zip(row, columns)] for row in rows]
+    cells = [[format_value(v, c) for v, c in zip(row, columns, strict=False)] for row in rows]
     widths = [max([len(c)] + [len(r[i]) for r in cells]) for i, c in enumerate(columns)]
-    line = lambda parts: "  ".join(p.ljust(w) for p, w in zip(parts, widths)).rstrip()
+
+    def line(parts):
+        return "  ".join(p.ljust(w) for p, w in zip(parts, widths, strict=False)).rstrip()
+
     return "\n".join([line(columns), line(["-" * w for w in widths]), *(line(r) for r in cells)])
 
 
@@ -78,5 +81,7 @@ def render_exposure(result: ExposureResult) -> str:
     if not result.exposures:
         return f"{heading}\nNo equity holdings, so there is no sector exposure."
     columns = ["sector", "exposure_pct", "portfolio_weight_pct", "market_value_pct", "holdings"]
-    rows = [[e.sector, e.exposure_pct, e.portfolio_weight_pct, e.market_value_pct, e.holdings] for e in result.exposures]
+    rows = [
+        [e.sector, e.exposure_pct, e.portfolio_weight_pct, e.market_value_pct, e.holdings] for e in result.exposures
+    ]
     return f"{heading}\n{_table(columns, rows)}"
