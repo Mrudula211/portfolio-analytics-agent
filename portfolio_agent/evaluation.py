@@ -372,6 +372,19 @@ def _percentile(values: list[float], fraction: float) -> float:
     return statistics.quantiles(values, n=100, method="inclusive")[int(fraction * 100) - 1]
 
 
+def _stability(results: list[CaseResult]) -> dict | None:
+    """With --runs above 1: how many questions got the same verdict every time they were scored."""
+    verdicts: dict[str, set[str]] = defaultdict(set)
+    counts = Counter(r.id for r in results)
+    if max(counts.values(), default=1) < 2:
+        return None
+    for r in results:
+        if r.verdict != INFRA_ERROR:
+            verdicts[r.id].add("pass" if r.verdict in _PASSING else r.verdict)
+    unstable = sorted(case for case, seen in verdicts.items() if len(seen) > 1)
+    return {"questions": len(verdicts), "consistent": len(verdicts) - len(unstable), "unstable": unstable}
+
+
 def summarize(results: list[CaseResult]) -> dict:
     scored = [r for r in results if r.verdict != INFRA_ERROR]
     total = len(scored) or 1
@@ -405,6 +418,7 @@ def summarize(results: list[CaseResult]) -> dict:
         "performance_adjusted_sql_score": round(statistics.mean(efficiencies), 4) if efficiencies else None,
         "llm_calls_per_question": round(sum(r.llm_calls for r in results) / (len(results) or 1), 3),
         "models_used": dict(Counter(r.model for r in results if r.model)),
+        "stability": _stability(results),
         "by_category": by_category,
         "by_route": by_route,
     }
@@ -441,6 +455,13 @@ def load_finished(report: Path) -> list[CaseResult]:
     return [CaseResult(**row) for row in rows if row["verdict"] != INFRA_ERROR]
 
 
+def _stability_text(stability: dict | None) -> str:
+    if stability is None:
+        return "single run"
+    unstable = f"; varied: {', '.join(stability['unstable'])}" if stability["unstable"] else ""
+    return f"{stability['consistent']} of {stability['questions']}{unstable}"
+
+
 def write_report(results: list[CaseResult], summary: dict, meta: dict, directory: Path, stem: str) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     payload = {"meta": meta, "summary": summary, "results": [asdict(r) for r in results]}
@@ -459,6 +480,7 @@ def write_report(results: list[CaseResult], summary: dict, meta: dict, directory
         f"| Performance-adjusted SQL score | {summary['performance_adjusted_sql_score']} |",
         f"| Model calls per question (excluding hedges) | {summary['llm_calls_per_question']} |",
         f"| Answering models | {summary['models_used']} |",
+        f"| Same verdict on every run | {_stability_text(summary['stability'])} |",
         "",
         "| Route | Count | p50 ms | p95 ms |",
         "| --- | --- | --- | --- |",

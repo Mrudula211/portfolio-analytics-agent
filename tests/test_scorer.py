@@ -151,3 +151,15 @@ def test_infra_errors_are_not_counted_as_wrong_answers(settings, make_agent):
     assert result.verdict == "infra_error"
     summary = summarize([result])
     assert summary["cases_scored"] == 0 and summary["infra_errors"] == 1
+
+
+def test_stability_counts_questions_whose_verdict_changes():
+    from portfolio_agent.evaluation import CaseResult
+
+    def result(case_id, verdict):
+        return CaseResult(case_id, "c", "-", "q", verdict, "", True, "model", "ok", 1.0, 1.0, 1)
+
+    runs = [result("a", EXACT), result("b", EXACT), result("a", EQUIVALENT), result("b", FAIL)]
+    stability = summarize(runs)["stability"]
+    assert stability == {"questions": 2, "consistent": 1, "unstable": ["b"]}
+    assert summarize(runs[:2])["stability"] is None

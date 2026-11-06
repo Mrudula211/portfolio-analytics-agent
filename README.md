@@ -37,7 +37,7 @@ Design decisions and trade-offs are in [docs/DESIGN.md](docs/DESIGN.md).
 | Working agent on the command line | `python -m portfolio_agent "<question>"`, or no question for an interactive prompt |
 | Evaluation script against the ground truth | `python evaluate.py`; results in [reports/live_extended.md](reports/live_extended.md) |
 | Brief documentation with a design diagram | This README (diagram under "How it works") and [docs/DESIGN.md](docs/DESIGN.md) |
-| Clean code with error handling | 108 tests and the `ruff` linter run in CI on every push; database, model and input errors become plain messages instead of crashes |
+| Clean code with error handling | 109 tests and the `ruff` linter run in CI on every push; database, model and input errors become plain messages instead of crashes |
 
 Optional enhancements from the brief, also done: parameterised queries, query validation, graceful database errors, logging, input validation, caching, a graphical interface (a web UI rather than Streamlit; see [docs/DESIGN.md](docs/DESIGN.md)), a REST API, concurrent requests, scoring that favours efficient queries, and hybrid questions using both tools. RAG was measured and deliberately not used; the reasons are in [docs/DESIGN.md](docs/DESIGN.md).
 
@@ -130,7 +130,7 @@ The tail latency comes from free-tier congestion: about half the answers came fr
 
 | Measure | Result |
 | --- | --- |
-| Unit and integration tests | 108 passed |
+| Unit and integration tests | 109 passed |
 | Scorer self-test, 40 cases with reference plans replayed | 40 of 40 |
 | Sector exposure fast path, uncached, 300 runs | p50 2.7 ms, p95 4.3 ms |
 | Exact-repeat cache hit, 300 runs | p50 0.015 ms |

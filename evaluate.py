@@ -85,6 +85,9 @@ def main() -> int:
     print(f"\nStrict accuracy: {summary['strict_accuracy']:.1%}  ({scored})")
     print(f"Lenient:         {summary['lenient_accuracy']:.1%}")
     print(f"Tool selection:  {summary['tool_selection_accuracy']:.1%}")
+    if summary["stability"]:
+        stable = summary["stability"]
+        print(f"Stability:       {stable['consistent']} of {stable['questions']} questions, same verdict every run")
     print(f"SQL efficiency:  {summary['performance_adjusted_sql_score']}")
     for route, stats in summary["by_route"].items():
         print(f"Latency {route:10} n={stats['count']:<4} p50={stats['p50_ms']} ms  p95={stats['p95_ms']} ms")
