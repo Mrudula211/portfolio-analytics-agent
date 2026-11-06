@@ -1,0 +1,11 @@
+[
+ {"id": "R-PARA", "description": "paraphrase of Q1", "question": "How many funds are there?", "expect": {"ref_sql": "SELECT COUNT(*) FROM portfolios"}},
+ {"id": "R-CASE", "description": "user casing differs from stored values", "question": "list portfolios with HIGH risk", "expect": {"status": ["VERIFIED", "ANSWERED_WITH_WARNINGS"], "ref_sql": "SELECT portfolio_name FROM portfolios WHERE target_risk_level = 'High'"}},
+ {"id": "R-ALIAS", "description": "informal name", "needs_llm": false, "question": "sector breakdown of the tech fund", "expect": {"tool": "exposure_calculator", "portfolio_id": 3}},
+ {"id": "R-ID", "description": "portfolio referenced by id", "needs_llm": false, "question": "sector exposure for portfolio 7", "expect": {"tool": "exposure_calculator", "portfolio_id": 7}},
+ {"id": "R-TYPO", "description": "misspelled portfolio name", "needs_llm": false, "question": "sector exposure for the Emerging Markts Fund", "expect": {"tool": "exposure_calculator", "portfolio_id": 10}},
+ {"id": "R-AMBIG", "description": "ambiguous reference asks instead of guessing", "needs_llm": false, "question": "sector exposure for the international fund", "expect": {"status": ["NEEDS_CLARIFICATION"]}},
+ {"id": "R-UNKNOWN", "description": "non-existent portfolio", "needs_llm": false, "question": "sector exposure for the Crypto Moonshot Fund", "expect": {"status": ["NEEDS_CLARIFICATION"]}},
+ {"id": "R-OFFTOPIC", "description": "off-topic question", "question": "What is the weather in Mumbai today?", "expect": {"status": ["REFUSED", "NEEDS_CLARIFICATION"]}},
+ {"id": "R-ESG", "description": "data not in schema", "question": "What is the ESG score of Apple?", "expect": {"status": ["REFUSED", "NEEDS_CLARIFICATION"]}}
+]

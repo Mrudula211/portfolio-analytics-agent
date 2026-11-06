@@ -1,0 +1,7 @@
+# Runtime
+google-genai>=2.0,<3.0   # 3.0 introduced breaking changes; pinned below
+sqlglot>=30.0
+python-dotenv>=1.0
+
+# Tests
+pytest>=8.0
