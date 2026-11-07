@@ -2,9 +2,11 @@
 
 The reasoning behind the main choices, what was rejected, and what is still weak.
 
-## Should this use a vector database?
+## Retrieval (RAG) and vector databases
 
-**No, and it was tested rather than assumed.** Semantic search is good at finding relevant passages in a large collection. Here, the collection is nine tables.
+The brief suggests RAG "to find the right metadata related to the user question to be used in the context". The agent does this. Before each Gemini call, the entity linker finds the portfolios, sectors and securities a question mentions, including partial names and typos, and adds their exact database values to the prompt (`Links` in [metadata.py](../portfolio_agent/metadata.py)). It uses lexical matching, not embeddings. What was tested and rejected is retrieving parts of the schema, below.
+
+**Should this use a vector database? No, and that was tested rather than assumed.** Semantic search is good at finding relevant passages in a large collection. Here, the collection is nine tables.
 
 I compared sending the full schema with in-process retrieval (BM25 plus foreign-key graph expansion), across the 23 evaluation questions that have a reference query. The benchmark and retrieval code were then removed as unneeded, and remain in git history at commit `95db72b`:
 
@@ -42,22 +44,9 @@ The one piece of model-written text shown to users is a short result title, and 
 
 ## Model choice and hedged requests
 
-The first live run used `gemini-3.5-flash-lite` on the assumption that a Lite model would be fastest. It took about 9 s at the median and 36 s at p95. Calling models directly, with retries off, showed why (five calls each on the free tier, in one session, so treat this as indicative):
+Free-tier latency is bimodal (about 1 s or over 10 s for identical requests), and failures are common. So the client turns off the SDK's retries and hedges instead: it asks the first model, starts the next after 2.5 s or on any failure, and takes the first answer. The order is `gemini-3.1-flash-lite`, then `gemini-3.5-flash`, then `gemini-3.6-flash`, chosen by measurement. All ten experiments behind these choices are in [EXPERIMENTS.md](EXPERIMENTS.md).
 
-| Model | Successful calls | Failures |
-| --- | --- | --- |
-| `gemini-3.5-flash` | 1.3 to 1.7 s | Two fast 503s |
-| `gemini-3.6-flash` | 1.9 to 3.3 s | None |
-| `gemini-3.1-flash-lite` | 1.0 to 9.9 s | One 504 after 24.6 s |
-| `gemini-3.5-flash-lite` | 1.2 to 13.4 s | None |
-| `gemini-flash-lite-latest` | 9.2 to 14.5 s | None |
-| `gemini-3.8-flash` | None | Five 503 or 504 |
-
-Latency is bimodal and failures are common, and the SDK's automatic retries made it worse by waiting on a congested model. The client now disables them and hedges: it asks `gemini-3.5-flash`, and starts the next model after 2.5 s or on any failure, taking the first answer. In the next run, model-routed questions that got an answer took 1.7 s at the median and 2.5 s at p95.
-
-**The trade-offs:** a hedge uses extra quota when it fires, and which model answers can vary, so the evaluation report records the answering model for every question. These numbers will change, so they are worth re-measuring before relying on a model.
-
-**Free-tier quota is a real constraint:** 20 requests per model per day. Evaluation therefore paces itself and can resume, and outages are reported separately from accuracy.
+**The trade-offs:** a hedge uses extra quota when it fires, and which model answers can vary, so every evaluation report records the answering model. Free-tier latency changes from day to day, so the order is worth re-measuring before relying on it.
 
 ## Deterministic fast path
 
@@ -109,3 +98,55 @@ The brief mentions both. A read-only file gives every request an independent con
 3. Log question, plan and outcome for review, turning real failures into new evaluation cases.
 4. Add conversation state for follow-up questions.
 5. Add document search over research reports, where a vector database would earn its place.
+
+## Safety
+
+Model-written SQL is treated as untrusted:
+
+- The database file is opened read-only.
+- An SQLite authorizer permits only `SELECT` on data tables and safe functions. It checks the compiled query, so text tricks do not get past it.
+- One statement per query, with limits on time, work, rows and value size.
+- Blocked queries are refused and never sent back for repair.
+- Query results and stored free text never reach the model, so data cannot act as a prompt injection, and a failed query returns only the database's error message.
+- The agent declines recommendations, forecasts and anything outside the data. It asks when a name could mean several funds.
+- The public API has per-client rate limiting and security headers, and the UI inserts data as text only.
+
+## REST API
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question":"What are the sector exposures for the Tech Innovation Fund?"}'
+```
+
+The response includes `status`, `answer`, `route`, `steps` (SQL, rows, exposures), `warnings`, `timings_ms` and `llm`. Also available: `GET /api/health`, `GET /api/about` and `GET /docs`.
+
+## Deploy
+
+The container serves the UI and API from one process and contains its own database.
+
+- **Render (free):** in the Render dashboard choose **New > Blueprint**, select this repository, and set `GEMINI_API_KEY`. Set `DEMO_PASSWORD` to require a password (any username) for everything except the health check. The free plan sleeps after about 15 idle minutes, so the first visit after a pause takes up to a minute.
+- **Any container host:** `docker build -t portfolio-agent . && docker run -p 7860:7860 -e GEMINI_API_KEY=... portfolio-agent`
+
+## Project layout
+
+```text
+portfolio_agent/
+  agent.py        routing and plan execution
+  tools.py        exposure calculator and SQL tool
+  sql_guard.py    safe execution of model-written SQL
+  metadata.py     schema cards, glossary, entity linking
+  prompts.py      prompt assembly
+  llm.py          Gemini client
+  render.py       answer formatting, no model involved
+  cache.py        exact-match cache
+  db.py           database build and data audit
+  evaluation.py   scoring
+  api.py, static/ REST API and web UI
+  demo_plans.json Gemini's stored plans for the UI's example questions
+evaluate.py       evaluation command
+eval/             the 30 extra evaluation questions
+scripts/          stored demo plans
+reports/          live evaluation reports
+tests/            unit and integration tests
+```
