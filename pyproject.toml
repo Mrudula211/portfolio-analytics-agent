@@ -8,3 +8,6 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RET"]
+
+# Splitting a word list keeps short vocabularies on one readable line.
+ignore = ["SIM905"]

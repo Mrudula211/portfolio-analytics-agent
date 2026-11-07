@@ -194,29 +194,15 @@ class Case:
 def load_ground_truth(path: Path) -> list[Case]:
     cases = []
     for item in json.loads(path.read_text(encoding="utf-8"))["questions"]:
-        truth = item["ground_truth"]
-        if item["type"] == "text2sql":
-            cases.append(
-                Case(
-                    f"gt{item['id']:02d}",
-                    "ground_truth",
-                    item["difficulty"],
-                    item["question"],
-                    "sql",
-                    truth["sql_query"],
-                )
+        truth, is_sql = item["ground_truth"], item["type"] == "text2sql"
+        portfolios = [] if is_sql else [truth["parameters"]["portfolio_name"]]
+        kind = "sql" if is_sql else "exposure"
+        case_id = f"gt{item['id']:02d}"
+        cases.append(
+            Case(
+                case_id, "ground_truth", item["difficulty"], item["question"], kind, truth.get("sql_query"), portfolios
             )
-        else:
-            cases.append(
-                Case(
-                    f"gt{item['id']:02d}",
-                    "ground_truth",
-                    item["difficulty"],
-                    item["question"],
-                    "exposure",
-                    portfolios=[truth["parameters"]["portfolio_name"]],
-                )
-            )
+        )
     return cases
 
 

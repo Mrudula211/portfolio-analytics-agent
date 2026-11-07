@@ -9,3 +9,9 @@ portfolio_database.db.*
 reports/*.json
 !reports/live_extended.json
 reports/self_test*
+.ruff_cache/
+.vscode/
+.idea/
+*.log
+.DS_Store
+Thumbs.db

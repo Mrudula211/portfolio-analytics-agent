@@ -32,17 +32,13 @@ function renderTable(columns, rows, caption) {
   const table = make("table");
   if (caption) table.append(make("caption", "", caption));
   const numeric = columns.map((_, i) => rows.length > 0 && rows.every((r) => r[i] === null || typeof r[i] === "number"));
-  const head = make("tr");
+  const head = table.createTHead().insertRow();
   columns.forEach((column, i) => head.append(make("th", numeric[i] ? "num" : "", column.replaceAll("_", " "))));
-  const thead = make("thead");
-  thead.append(head);
-  const tbody = make("tbody");
+  const body = table.createTBody();
   rows.forEach((row) => {
-    const tr = make("tr");
+    const tr = body.insertRow();
     row.forEach((value, i) => tr.append(make("td", numeric[i] ? "num" : "", formatCell(value, columns[i]))));
-    tbody.append(tr);
   });
-  table.append(thead, tbody);
   wrap.append(table);
   return wrap;
 }
@@ -144,32 +140,38 @@ function renderProblem(message) {
   el("content").replaceChildren();
 }
 
+// Only the latest question may update the page, so a slow earlier reply cannot overwrite a newer one.
+let latest = 0;
+let timer;
+
 async function ask(question) {
-  const button = el("ask-button");
-  button.disabled = true;
+  const id = ++latest;
+  clearInterval(timer);
   el("result").hidden = false;
   renderProblem("");
   el("message").className = "message pending";
   const started = performance.now();
-  const timer = setInterval(() => {
+  timer = setInterval(() => {
     el("message").textContent = `Working... ${((performance.now() - started) / 1000).toFixed(1)} s`;
   }, 100);
+  let reply = null;
+  let problem = "Could not reach the server. Please check your connection and try again.";
   try {
     const response = await fetch("/api/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question }),
     });
-    clearInterval(timer);
-    if (response.status === 429) return renderProblem("Too many questions. Please wait a minute.");
-    if (!response.ok) return renderProblem("That question could not be processed. Please try rewording it.");
-    render(await response.json());
+    if (response.ok) reply = await response.json();
+    else if (response.status === 429) problem = "Too many questions. Please wait a minute.";
+    else problem = "That question could not be processed. Please try rewording it.";
   } catch {
-    clearInterval(timer);
-    renderProblem("Could not reach the server. Please check your connection and try again.");
-  } finally {
-    button.disabled = false;
+    // Network failure: keep the default message.
   }
+  if (id !== latest) return;
+  clearInterval(timer);
+  if (reply) render(reply);
+  else renderProblem(problem);
 }
 
 function renderAbout(about) {
@@ -191,10 +193,8 @@ function renderAbout(about) {
       return tile;
     }));
     const rows = Object.entries(s.by_category).map(([name, c]) => [name.replaceAll("_", " "), c.passed, c.partial, c.total]);
-    const table = make("div", "card");
-    table.id = "eval-table";
-    table.append(renderTable(["category", "passed", "partial", "questions"], rows));
-    el("eval-table").replaceWith(table);
+    el("eval-table").className = "card";
+    el("eval-table").replaceChildren(renderTable(["category", "passed", "partial", "questions"], rows));
     el("eval-meta").textContent = `Live run of ${report.meta.dataset} questions, ${report.meta.date}. `
       + "Answers are compared with reference results, not SQL text; exposures are checked against an independent calculation.";
   }

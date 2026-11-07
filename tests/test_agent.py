@@ -207,3 +207,10 @@ def test_repair_can_decline_instead_of_substituting_a_metric(make_agent):
     agent.llm.plan = plan
     reply = agent.answer_question(question)
     assert reply.status == "declined" and reply.answer == "Not in risk_metrics."
+
+
+def test_stored_plan_with_invalid_sql_and_no_model_does_not_crash(settings):
+    agent = PortfolioAgent(settings)
+    assert agent.llm is None
+    agent.preload("A stored question", [sql_call("SELECT nope FROM portfolios")])
+    assert agent.cache.get("a stored question") is None

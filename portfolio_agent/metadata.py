@@ -49,24 +49,9 @@ unless asked.
 CVaR, beta, correlation, tracking error, information ratio and Sortino ratio."""
 
 _GENERIC_NAME_TOKENS = frozenset(
-    [
-        "fund",
-        "portfolio",
-        "index",
-        "total",
-        "market",
-        "plus",
-        "the",
-        "stock",
-        "bond",
-        "equity",
-        "value",
-        "cap",
-        "small",
-        "income",
-    ]
+    "fund portfolio index total market plus the stock bond equity value cap small income".split()
 )
-_COMPANY_SUFFIXES = frozenset(["inc", "corp", "corporation", "co", "company", "plc", "ltd", "the", "com"])
+_COMPANY_SUFFIXES = frozenset("inc corp corporation co company plc ltd the com".split())
 _SECTOR_ALIASES = {
     "tech": "Technology",
     "financial": "Financials",

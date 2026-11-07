@@ -111,14 +111,12 @@ class PortfolioAgent:
 
         The plan, not the answer, is stored: it runs against the current data at start-up.
         """
-        plan = LLMResponse(calls, "stored plan") if calls else None
-        links = self.linker.link(question)
-        if plan is None:
-            reply = self.answer_question(question)
-        else:
-            reply = self._answer_with_calls(question, links, plan, route="model")
-            if reply.status in {STATUS_OK, STATUS_DECLINED}:
-                self.cache.put(normalize_question(question), reply)
+        if not calls:  # Fast-path questions need no plan; answering once caches them.
+            self.answer_question(question)
+            return
+        reply = self._answer_with_calls(question, self.linker.link(question), LLMResponse(calls), route="model")
+        if reply.status in {STATUS_OK, STATUS_DECLINED}:
+            self.cache.put(normalize_question(question), reply)
 
     def answer_question(self, question: str, *, use_cache: bool = True) -> AgentResponse:
         started = time.perf_counter()
@@ -244,6 +242,8 @@ class PortfolioAgent:
             try:
                 result = self.tools.run_sql(sql)
             except SQLExecutionError as exc:  # Invalid but harmless: one repair attempt.
+                if self.llm is None:  # No model to repair with, e.g. a stored plan without a key.
+                    raise
                 repair = self.llm.plan(self._system, build_repair_prompt(question, links, sql, str(exc)))
                 declined = next((c for c in repair.calls if c.name == "decline"), None)
                 if declined is not None:  # The data does not hold what was asked; better than a substitute.
@@ -259,12 +259,12 @@ class PortfolioAgent:
         except (SQLExecutionError, LLMError, StopIteration) as exc:
             step.error = str(exc)
             raise _StopPlan(STATUS_ERROR, "I could not produce a valid query for that question.") from exc
-        step.columns = result.columns
-        step.rows = result.rows
-        step.truncated = result.truncated
-        step.elapsed_ms = round(result.elapsed_ms, 3)
-        step.vm_steps = result.vm_steps
-        step.full_scans = result.full_scans
+        step.columns, step.rows, step.truncated = result.columns, result.rows, result.truncated
+        step.elapsed_ms, step.vm_steps, step.full_scans = (
+            round(result.elapsed_ms, 3),
+            result.vm_steps,
+            result.full_scans,
+        )
         return result, render_sql(result, title, question), repair
 
     def _run_exposure_step(self, call: ToolCall, previous: QueryResult | None, reply: AgentResponse) -> list[str]:
