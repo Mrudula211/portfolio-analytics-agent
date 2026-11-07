@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 
 from .agent import PortfolioAgent
 from .config import ROOT
-from .db import data_quality_findings
+from .db import connect_readonly, data_quality_findings
 from .llm import ToolCall
 
 STATIC = Path(__file__).parent / "static"
@@ -80,6 +80,18 @@ def _client_address(request: Request) -> str:
     return forwarded or (request.client.host if request.client else "unknown")
 
 
+def _dataset_summary(db_path: Path) -> dict:
+    conn = connect_readonly(db_path)
+    try:
+        summary = {
+            t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in ("portfolios", "securities", "holdings")
+        }
+        summary["as_of"] = conn.execute("SELECT MAX(price_date) FROM historical_prices").fetchone()[0]
+        return summary
+    finally:
+        conn.close()
+
+
 def create_app(agent: PortfolioAgent | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -93,6 +105,7 @@ def create_app(agent: PortfolioAgent | None = None) -> FastAPI:
         app.state.about = {
             "examples": [demo["question"] for demo in demos],
             "data_notes": data_quality_findings(app.state.agent.settings.db_path),
+            "dataset": _dataset_summary(app.state.agent.settings.db_path),
             "evaluation": {"meta": report["meta"], "summary": report["summary"]} if report else None,
         }
         yield

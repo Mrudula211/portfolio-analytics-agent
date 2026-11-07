@@ -52,7 +52,7 @@ def test_rate_limit_is_per_client():
 def test_health_and_ui(client):
     assert client.get("/api/health").json()["status"] == "ok"
     page = client.get("/")
-    assert page.status_code == 200 and "Portfolio Analytics Agent" in page.text
+    assert page.status_code == 200 and "Portfolio Analytics" in page.text
 
 
 def test_security_headers_present(client):

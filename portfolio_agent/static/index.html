@@ -3,86 +3,84 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Portfolio Analytics Agent</title>
-  <meta name="description" content="Ask questions about portfolio data in plain English.">
+  <title>Portfolio Analytics</title>
+  <meta name="description" content="Query portfolio data in plain English.">
   <link rel="preload" href="/static/figtree-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
   <header class="topbar">
-    <div class="wrap topbar-inner">
-      <span class="product">Portfolio Analytics Agent</span>
-      <nav class="topnav" aria-label="Page">
-        <a href="#about">How it's tested</a>
-        <a href="#speed">How it stays fast</a>
-        <a href="#data">What the data shows</a>
-        <a href="/docs">API</a>
-      </nav>
+    <div class="brand"><span class="mark" aria-hidden="true">PA</span>Portfolio Analytics</div>
+    <nav class="tabs" aria-label="Views">
+      <a href="#query" data-view="query" class="tab">Query</a>
+      <a href="#evaluation" data-view="evaluation" class="tab">Evaluation</a>
+    </nav>
+    <div class="topbar-right">
+      <span id="model-status" class="status"></span>
+      <a href="/docs" class="link">API</a>
     </div>
   </header>
 
-  <section class="hero">
-    <div class="wrap">
-      <p class="eyebrow">Portfolio analytics</p>
-      <h1>Ask your portfolio data anything</h1>
-      <p class="lede">Holdings, risk, performance and sector exposure, in plain English. Every figure comes from the database, never from the model's memory.</p>
-    </div>
-  </section>
+  <div class="layout">
+    <aside class="sidebar">
+      <section>
+        <h2>Examples</h2>
+        <ul id="examples" class="examples"></ul>
+      </section>
+      <section>
+        <h2>Dataset</h2>
+        <dl id="dataset" class="facts"></dl>
+      </section>
+      <section>
+        <h2>Data notes</h2>
+        <ul id="data-notes" class="notes"></ul>
+      </section>
+    </aside>
 
-  <main class="wrap">
-    <section class="ask-card">
-      <p class="eyebrow">Ask a question</p>
-      <form id="ask-form" class="ask" autocomplete="off">
-        <label for="question" class="visually-hidden">Your question</label>
-        <input id="question" name="question" type="text" maxlength="500" required
-               placeholder="What are the sector exposures for the Tech Innovation Fund?">
-        <button id="ask-button" type="submit">Ask</button>
-      </form>
-      <div id="examples" class="examples" aria-label="Example questions"></div>
-      <p id="model-note" class="note" hidden></p>
-    </section>
+    <main class="main">
+      <section id="view-query" class="view">
+        <form id="ask-form" class="query" autocomplete="off">
+          <label for="question" class="visually-hidden">Question</label>
+          <input id="question" name="question" type="text" maxlength="500" required
+                 placeholder="Ask about holdings, risk, performance or sector exposure">
+          <button type="submit">Run</button>
+        </form>
+        <p id="model-note" class="banner" hidden></p>
 
-    <section id="result" class="card result" aria-live="polite" hidden>
-      <div class="result-head">
-        <span id="route" class="route"></span>
-        <span id="latency" class="latency"></span>
-        <span id="breakdown" class="breakdown"></span>
-      </div>
-      <p id="message" class="message"></p>
-      <ul id="warnings" class="warnings"></ul>
-      <div id="content"></div>
-    </section>
+        <section id="result" class="panel" aria-live="polite">
+          <div class="panel-head">
+            <span id="result-question" class="result-question">No query yet</span>
+            <span class="meta"><span id="route" class="route"></span><span id="latency" class="latency"></span></span>
+          </div>
+          <div class="panel-body">
+            <p id="message" class="message">Pick an example or type a question. Answers are computed from the database, and the SQL behind each one is shown.</p>
+            <ul id="warnings" class="warnings"></ul>
+            <div id="content"></div>
+          </div>
+        </section>
+      </section>
 
-    <section id="about" class="section" hidden>
-      <p class="eyebrow">How it's tested</p>
-      <h2>Measured on 40 questions, not claimed</h2>
-      <p id="eval-meta" class="muted"></p>
-      <div id="tiles" class="tiles"></div>
-      <div id="eval-table"></div>
-    </section>
+      <section id="view-evaluation" class="view" hidden>
+        <div class="panel">
+          <div class="panel-head"><span class="result-question">Live evaluation</span><span id="eval-meta" class="meta"></span></div>
+          <div class="panel-body">
+            <div id="eval-summary"></div>
+            <h3>By category</h3>
+            <div id="eval-table"></div>
+            <h3>How it works</h3>
+            <ul class="plain">
+              <li>Repeat questions come from an exact-match cache. Sector exposure for one named fund runs the calculator without the model.</li>
+              <li>Other questions cost one Gemini call that returns the whole plan. If a model is slow, the next one starts after 2.5 s.</li>
+              <li>Code formats every answer from query results, so the model never states a figure. Answers are graded against reference results, not SQL text.</li>
+            </ul>
+            <p class="muted">Full reports and the experiments behind these choices are in the repository's <code>docs/</code> and <code>reports/</code> folders.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
 
-    <section id="speed" class="section">
-      <p class="eyebrow">How it stays fast</p>
-      <h2>The cheapest correct path for every question</h2>
-      <ol class="routes">
-        <li><strong>Repeat questions</strong> come from an exact-match cache, in under a millisecond.</li>
-        <li><strong>Sector exposure for one named fund</strong> skips the model and runs the calculator directly.</li>
-        <li><strong>Everything else</strong> costs one Gemini call that returns the whole plan. If a model is slow, a second starts after 2.5 s and the first answer wins. Code, not the model, writes the answer.</li>
-      </ol>
-    </section>
-
-    <section id="data" class="section">
-      <p class="eyebrow">What the data shows</p>
-      <h2>Issues found in the sample data</h2>
-      <ul id="data-notes" class="data-notes"></ul>
-    </section>
-  </main>
-
-  <footer class="footer">
-    <div class="wrap">
-      An independent technical assessment for PL Capital, built on its sample dataset. Not a PL Capital product and not investment advice.
-    </div>
-  </footer>
+  <footer class="statusbar">Sample dataset. Not investment advice. An independent assessment project, not a PL Capital product.</footer>
   <div id="tooltip" class="tooltip" role="status" hidden></div>
   <script src="/static/app.js"></script>
 </body>

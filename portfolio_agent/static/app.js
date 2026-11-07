@@ -3,12 +3,7 @@
 // All data reaches the page through textContent, so database values can never run as HTML.
 const el = (id) => document.getElementById(id);
 
-const ROUTE_LABELS = {
-  cache: "Cached",
-  fast_path: "Direct calculation, no model",
-  model: "Gemini plan + database",
-  validation: "Not sent",
-};
+const ROUTE_LABELS = { cache: "Cached", fast_path: "Calculator", model: "Gemini + SQL", validation: "Not run" };
 
 function make(tag, className, text) {
   const node = document.createElement(tag);
@@ -47,21 +42,21 @@ function showTooltip(event, exposure) {
   const tip = el("tooltip");
   tip.replaceChildren(
     make("strong", "", exposure.sector),
-    make("div", "", `Exposure ${exposure.exposure_pct.toFixed(2)}% of equities`),
-    make("div", "", `Weight ${exposure.portfolio_weight_pct.toFixed(2)}% of portfolio`),
-    make("div", "", `By market value ${exposure.market_value_pct.toFixed(2)}%`),
+    make("div", "", `${exposure.exposure_pct.toFixed(2)}% of equities`),
+    make("div", "", `${exposure.portfolio_weight_pct.toFixed(2)}% of portfolio`),
+    make("div", "", `${exposure.market_value_pct.toFixed(2)}% by market value`),
     make("div", "", `${exposure.holdings} holding${exposure.holdings === 1 ? "" : "s"}`),
   );
   tip.hidden = false;
-  tip.style.left = `${Math.min(event.clientX + 14, window.innerWidth - 240)}px`;
+  tip.style.left = `${Math.min(event.clientX + 14, window.innerWidth - 220)}px`;
   tip.style.top = `${event.clientY + 14}px`;
 }
 
 function renderExposure(data) {
   const block = make("div", "block");
-  block.append(make("h3", "", `${data.portfolio_name}: share of equity holdings by sector`));
+  block.append(make("h3", "", `${data.portfolio_name}: sector exposure of equity holdings`));
   if (data.exposures.length === 0) {
-    block.append(make("p", "", "No equity holdings, so there is no sector exposure."));
+    block.append(make("p", "message", "No equity holdings, so there is no sector exposure."));
     return block;
   }
   const bars = make("div", "bars");
@@ -77,7 +72,7 @@ function renderExposure(data) {
   });
   block.append(bars);
   const details = make("details");
-  details.append(make("summary", "", "Table, including whole-portfolio weight and market value"));
+  details.append(make("summary", "", "Table with portfolio weight and market value"));
   details.append(renderTable(
     ["sector", "exposure_pct", "portfolio_weight_pct", "market_value_pct", "holdings"],
     data.exposures.map((e) => [e.sector, e.exposure_pct, e.portfolio_weight_pct, e.market_value_pct, e.holdings]),
@@ -90,7 +85,7 @@ function renderSqlStep(step) {
   const block = make("div", "block");
   if (step.input.title) block.append(make("h3", "", step.input.title));
   if (step.rows && step.rows.length > 0) {
-    block.append(renderTable(step.columns, step.rows, step.truncated ? "Results were cut off at the row limit." : ""));
+    block.append(renderTable(step.columns, step.rows, step.truncated ? "Cut off at the row limit." : ""));
   }
   if (step.input.sql) {
     const details = make("details");
@@ -101,31 +96,33 @@ function renderSqlStep(step) {
   return block;
 }
 
+// A single value, an empty result or a refusal reads best as one line; tables speak for themselves.
 function headline(reply) {
-  if (reply.status !== "ok") return reply.answer;
+  if (reply.status !== "ok") return [reply.answer, ""];
+  const first = reply.steps[0];
   const onlySql = reply.steps.every((s) => s.tool === "run_sql");
-  const sql = reply.steps[0];
-  if (onlySql && sql && sql.rows && (sql.rows.length === 0 || (sql.rows.length === 1 && sql.columns.length === 1))) {
-    return reply.answer;
+  if (onlySql && first && first.rows) {
+    if (first.rows.length === 1 && first.columns.length === 1) return [formatCell(first.rows[0][0], first.columns[0]), "value"];
+    if (first.rows.length === 0) return [reply.answer, ""];
   }
-  return "";
+  return ["", ""];
 }
 
-function setHead(route, latency, breakdown) {
+function setMeta(route, latency) {
   el("route").textContent = route ? ROUTE_LABELS[route] || route : "";
-  el("route").dataset.route = route || "";
   el("latency").textContent = latency;
-  el("breakdown").textContent = breakdown;
+}
+
+function showMessage(text, className = "") {
+  el("message").className = `message ${className}`.trim();
+  el("message").textContent = text;
 }
 
 function render(reply) {
   const t = reply.timings_ms;
-  const parts = [];
-  if (t.llm) parts.push(`model ${formatMs(t.llm)}`);
-  if (t.tools) parts.push(`database ${formatMs(t.tools)}`);
-  setHead(reply.route, t.total === undefined ? "" : formatMs(t.total), parts.join(" + "));
-  el("message").className = "message";
-  el("message").textContent = headline(reply);
+  setMeta(reply.route, t.total === undefined ? "" : formatMs(t.total));
+  const [text, className] = headline(reply);
+  showMessage(text, className);
   el("warnings").replaceChildren(...reply.warnings.map((w) => make("li", "", w)));
   el("content").replaceChildren(...(reply.status === "ok" ? reply.steps : []).map(
     (step) => (step.exposure ? renderExposure(step.exposure) : renderSqlStep(step)),
@@ -133,9 +130,8 @@ function render(reply) {
 }
 
 function renderProblem(message) {
-  setHead("", "", "");
-  el("message").className = "message";
-  el("message").textContent = message;
+  setMeta("", "");
+  showMessage(message);
   el("warnings").replaceChildren();
   el("content").replaceChildren();
 }
@@ -147,15 +143,17 @@ let timer;
 async function ask(question) {
   const id = ++latest;
   clearInterval(timer);
-  el("result").hidden = false;
+  showView("query");
+  el("result-question").textContent = question;
+  document.querySelectorAll("#examples button").forEach((b) => b.classList.toggle("active", b.textContent === question));
   renderProblem("");
-  el("message").className = "message pending";
   const started = performance.now();
   timer = setInterval(() => {
-    el("message").textContent = `Working... ${((performance.now() - started) / 1000).toFixed(1)} s`;
+    el("latency").textContent = `${((performance.now() - started) / 1000).toFixed(1)} s`;
+    showMessage("Running...");
   }, 100);
   let reply = null;
-  let problem = "Could not reach the server. Please check your connection and try again.";
+  let problem = "Could not reach the server. Check your connection and try again.";
   try {
     const response = await fetch("/api/ask", {
       method: "POST",
@@ -164,7 +162,7 @@ async function ask(question) {
     });
     if (response.ok) reply = await response.json();
     else if (response.status === 429) problem = "Too many questions. Please wait a minute.";
-    else problem = "That question could not be processed. Please try rewording it.";
+    else problem = "That question could not be processed. Try rewording it.";
   } catch {
     // Network failure: keep the default message.
   }
@@ -174,31 +172,63 @@ async function ask(question) {
   else renderProblem(problem);
 }
 
-function renderAbout(about) {
-  el("data-notes").replaceChildren(...about.data_notes.map((note) => make("li", "", note)));
-  const report = about.evaluation;
-  if (report) {
-    const s = report.summary;
-    const model = s.by_route.model || {};
-    const tiles = [
-      [`${(s.strict_accuracy * 100).toFixed(1)}%`, `strict accuracy on ${s.cases_scored} questions`],
-      [`${(s.tool_selection_accuracy * 100).toFixed(0)}%`, "right tool chosen"],
-      [model.p50_ms ? formatMs(model.p50_ms) : "-", "median answer using the model"],
-      [model.p95_ms ? formatMs(model.p95_ms) : "-", "95th percentile using the model"],
-    ];
-    el("tiles").replaceChildren(...tiles.map(([value, label], index) => {
-      const tile = make("div", "tile");
-      if (index === 0) tile.append(make("span", "tile-tag", "Live run"));
-      tile.append(make("div", "tile-value", value), make("div", "tile-label", label));
-      return tile;
-    }));
-    const rows = Object.entries(s.by_category).map(([name, c]) => [name.replaceAll("_", " "), c.passed, c.partial, c.total]);
-    el("eval-table").className = "card";
-    el("eval-table").replaceChildren(renderTable(["category", "passed", "partial", "questions"], rows));
-    el("eval-meta").textContent = `Live run of ${report.meta.dataset} questions, ${report.meta.date}. `
-      + "Answers are compared with reference results, not SQL text; exposures are checked against an independent calculation.";
+function showView(name) {
+  el("view-query").hidden = name !== "query";
+  el("view-evaluation").hidden = name !== "evaluation";
+  document.querySelectorAll(".tab").forEach((tab) => {
+    if (tab.dataset.view === name) tab.setAttribute("aria-current", "page");
+    else tab.removeAttribute("aria-current");
+  });
+}
+
+function renderEvaluation(report) {
+  if (!report) {
+    el("eval-summary").replaceChildren(make("p", "message", "No evaluation report is bundled with this deployment."));
+    return;
   }
-  el("about").hidden = false;
+  const s = report.summary;
+  const model = s.by_route.model || {};
+  const items = [
+    [`${(s.strict_accuracy * 100).toFixed(1)}%`, `strict accuracy, ${s.cases_scored} questions scored`],
+    [`${(s.lenient_accuracy * 100).toFixed(1)}%`, "counting partial answers"],
+    [`${(s.tool_selection_accuracy * 100).toFixed(1)}%`, "correct tool chosen"],
+    [model.p50_ms ? formatMs(model.p50_ms) : "-", "median, with a model call"],
+    [model.p95_ms ? formatMs(model.p95_ms) : "-", "95th percentile, with a model call"],
+  ];
+  const grid = make("div", "kv");
+  items.forEach(([value, label]) => {
+    const cell = make("div");
+    cell.append(make("strong", "", value), make("span", "", label));
+    grid.append(cell);
+  });
+  el("eval-summary").replaceChildren(grid);
+  const rows = Object.entries(s.by_category).map(([name, c]) => [name.replaceAll("_", " "), c.passed, c.partial, c.total]);
+  el("eval-table").replaceChildren(renderTable(["category", "passed", "partial", "questions"], rows));
+  el("eval-meta").textContent = report.meta.date;
+}
+
+function renderSidebar(about) {
+  el("examples").replaceChildren(...about.examples.map((question) => {
+    const item = make("li");
+    const button = make("button", "", question);
+    button.type = "button";
+    button.addEventListener("click", () => {
+      el("question").value = question;
+      ask(question);
+    });
+    item.append(button);
+    return item;
+  }));
+  const d = about.dataset;
+  const facts = [["Portfolios", d.portfolios], ["Securities", d.securities], ["Holdings", d.holdings], ["Prices up to", d.as_of]];
+  el("dataset").replaceChildren(...facts.flatMap(([label, value]) => [make("dt", "", label), make("dd", "", String(value))]));
+  el("data-notes").replaceChildren(...about.data_notes.map((note) => make("li", "", note)));
+  el("model-status").textContent = about.model_configured ? "Gemini connected" : "Gemini not configured";
+  el("model-status").classList.toggle("offline", !about.model_configured);
+  if (!about.model_configured) {
+    el("model-note").textContent = "No Gemini API key is configured, so only sector exposure questions for a named fund and the examples will work.";
+    el("model-note").hidden = false;
+  }
 }
 
 el("ask-form").addEventListener("submit", (event) => {
@@ -207,20 +237,10 @@ el("ask-form").addEventListener("submit", (event) => {
   if (question) ask(question);
 });
 
+window.addEventListener("hashchange", () => showView(location.hash === "#evaluation" ? "evaluation" : "query"));
+showView(location.hash === "#evaluation" ? "evaluation" : "query");
+
 fetch("/api/about").then((r) => r.json()).then((about) => {
-  about.examples.forEach((question) => {
-    const chip = make("button", "", question);
-    chip.type = "button";
-    chip.title = question;
-    chip.addEventListener("click", () => {
-      el("question").value = question;
-      ask(question);
-    });
-    el("examples").append(chip);
-  });
-  if (!about.model_configured) {
-    el("model-note").textContent = "No Gemini API key is configured here, so only direct sector exposure questions can be answered.";
-    el("model-note").hidden = false;
-  }
-  renderAbout(about);
+  renderSidebar(about);
+  renderEvaluation(about.evaluation);
 });
