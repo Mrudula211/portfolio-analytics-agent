@@ -73,6 +73,13 @@ def _authorized(request: Request, password: str) -> bool:
     return scheme.lower() == "basic" and secrets.compare_digest(supplied.encode(), password.encode())
 
 
+def _client_address(request: Request) -> str:
+    """The address the hosting proxy saw. The proxy appends it last to X-Forwarded-For, so the
+    rightmost entry cannot be forged; anything to its left came from the client."""
+    forwarded = request.headers.get("x-forwarded-for", "").split(",")[-1].strip()
+    return forwarded or (request.client.host if request.client else "unknown")
+
+
 def create_app(agent: PortfolioAgent | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -105,7 +112,7 @@ def create_app(agent: PortfolioAgent | None = None) -> FastAPI:
 
     @app.post("/api/ask")
     def ask(body: AskRequest, request: Request) -> dict:
-        client = request.client.host if request.client else "unknown"
+        client = _client_address(request)
         if not request.app.state.limiter.allow(client):
             raise HTTPException(429, "Too many questions. Please wait a minute.", {"Retry-After": "60"})
         return request.app.state.agent.answer_question(body.question).to_dict()

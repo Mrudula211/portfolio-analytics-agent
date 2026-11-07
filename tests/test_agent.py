@@ -1,3 +1,4 @@
+import dataclasses
 import threading
 
 import pytest
@@ -214,3 +215,17 @@ def test_stored_plan_with_invalid_sql_and_no_model_does_not_crash(settings):
     assert agent.llm is None
     agent.preload("A stored question", [sql_call("SELECT nope FROM portfolios")])
     assert agent.cache.get("a stored question") is None
+
+
+def test_daily_model_cap_is_shared_but_spares_cache_and_fast_path(settings):
+    from portfolio_agent.llm import ScriptedLLM
+
+    questions = ["Count the portfolios", "Count the bonds", "Count the stocks"]
+    script = {q: [sql_call("SELECT 1")] for q in questions}
+    agent = PortfolioAgent(dataclasses.replace(settings, daily_model_questions=2), llm=ScriptedLLM(script))
+    assert agent.answer_question(questions[0]).status == "ok"
+    assert agent.answer_question(questions[1]).status == "ok"
+    limited = agent.answer_question(questions[2])
+    assert limited.status == "error" and "daily limit" in limited.answer
+    assert agent.answer_question(questions[0]).route == "cache"
+    assert agent.answer_question("sector exposure of Balanced Portfolio").route == "fast_path"

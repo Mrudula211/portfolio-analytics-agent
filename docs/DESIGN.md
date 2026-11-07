@@ -109,7 +109,11 @@ Model-written SQL is treated as untrusted:
 - Blocked queries are refused and never sent back for repair.
 - Query results and stored free text never reach the model, so data cannot act as a prompt injection, and a failed query returns only the database's error message.
 - The agent declines recommendations, forecasts and anything outside the data. It asks when a name could mean several funds.
-- The public API has per-client rate limiting and security headers, and the UI inserts data as text only.
+- The public API limits each client to 20 questions a minute. It identifies clients by the address the hosting proxy recorded: the rightmost `X-Forwarded-For` entry, which a client cannot forge.
+- A daily cap on questions sent to Gemini, shared by all users (`DAILY_MODEL_QUESTIONS`, 300 on Render), stops one visitor from using up the day's quota. The cached example questions keep working past the cap.
+- Security headers are set, and the UI inserts data as text only.
+
+**Data governance.** On Gemini's free tier, Google may use prompts to improve its products. Here a prompt contains only the schema, a short glossary, matched names and the user's question, never query results or holdings. A production deployment on client data would use a paid, enterprise or self-hosted model endpoint covered by a data-processing agreement.
 
 ## REST API
 
@@ -125,7 +129,7 @@ The response includes `status`, `answer`, `route`, `steps` (SQL, rows, exposures
 
 The container serves the UI and API from one process and contains its own database.
 
-- **Render (free):** in the Render dashboard choose **New > Blueprint**, select this repository, and set `GEMINI_API_KEY`. Set `DEMO_PASSWORD` to require a password (any username) for everything except the health check. The free plan sleeps after about 15 idle minutes, so the first visit after a pause takes up to a minute.
+- **Render (free):** in the Render dashboard choose **New > Blueprint**, select this repository, and set `GEMINI_API_KEY`. The Blueprint sets `DAILY_MODEL_QUESTIONS` to 300. Set `DEMO_PASSWORD` to require a password (any username) for everything except the health check. The free plan sleeps after about 15 idle minutes, so the first visit after a pause takes up to a minute.
 - **Any container host:** `docker build -t portfolio-agent . && docker run -p 7860:7860 -e GEMINI_API_KEY=... portfolio-agent`
 
 ## Project layout

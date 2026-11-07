@@ -15,7 +15,7 @@ load_dotenv(ROOT / ".env")
 @dataclass(frozen=True)
 class Settings:
     gemini_api_key: str = ""
-    # Chosen by measurement on 7 Nov 2026: Lite was fastest and most reliable; see docs/DESIGN.md.
+    # Chosen by measurement on 7 Nov 2026: Lite was fastest, with 25x the daily quota; see docs/EXPERIMENTS.md.
     gemini_model: str = "gemini-3.1-flash-lite"
     gemini_fallback_models: tuple[str, ...] = ("gemini-3.5-flash", "gemini-3.6-flash")
     llm_timeout_s: float = 12.0
@@ -30,6 +30,7 @@ class Settings:
     cache_size: int = 512
     rate_limit_per_minute: int = 20
     demo_password: str = ""  # When set, the web app asks for it.
+    daily_model_questions: int = 0  # Questions sent to Gemini per UTC day; 0 means no limit.
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -43,4 +44,5 @@ class Settings:
             ),
             rate_limit_per_minute=int(os.getenv("RATE_LIMIT_PER_MINUTE", cls.rate_limit_per_minute)),
             demo_password=os.getenv("DEMO_PASSWORD", ""),
+            daily_model_questions=int(os.getenv("DAILY_MODEL_QUESTIONS", cls.daily_model_questions)),
         )

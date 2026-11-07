@@ -15,7 +15,7 @@ Note: Recorded weights and market values disagree by up to 11.2 points; the reco
 
 ## At a glance
 
-- **Brief's 10 questions:** 8 correct and 2 partly correct (Q5 and Q8), with the same verdicts in all three live runs.
+- **Brief's 10 questions:** 8 correct and 2 partly correct (Q5 and Q8), with the same verdicts in every run where they were scored.
 - **All 40 questions** (the brief's 10 plus 30 I wrote): 92.3% strict accuracy. Safety and refusal cases: 10 of 10.
 - **Speed:**
   - under 1 ms for repeat questions
@@ -32,7 +32,7 @@ Note: Recorded weights and market values disagree by up to 11.2 points; the reco
 | Command-line agent that chooses a tool | [agent.py](portfolio_agent/agent.py) | `--trace` shows the tool chosen |
 | Evaluator against the ground truth | [evaluate.py](evaluate.py), [evaluation.py](portfolio_agent/evaluation.py) | `python evaluate.py`, or `--self-test` without an API key |
 | Brief documentation and a diagram | This page and [docs/](docs/) | Diagram below |
-| Clean code with error handling | 111 tests, the `ruff` linter, CI on every push | `pytest` |
+| Clean code with error handling | 113 tests, the `ruff` linter, CI on every push | `pytest` |
 
 **Optional enhancements:**
 - **SQL safety:** parameterised queries, validation before execution and graceful database errors.

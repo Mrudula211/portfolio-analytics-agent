@@ -105,3 +105,13 @@ def test_demo_password_protects_everything_but_health(settings, make_agent):
         right = {"Authorization": "Basic " + base64.b64encode(b"reviewer:s3cret").decode()}
         assert protected.get("/", headers=wrong).status_code == 401
         assert protected.get("/", headers=right).status_code == 200
+
+
+def test_rate_limit_ignores_forged_forwarded_addresses(client):
+    client.app.state.limiter = RateLimiter(limit=2)
+    payload = {"question": "How many portfolios exist?"}
+    codes = []
+    for i in range(3):
+        headers = {"X-Forwarded-For": f"10.0.0.{i}, 203.0.113.7"}  # Forged left entry, real right entry.
+        codes.append(client.post("/api/ask", json=payload, headers=headers).status_code)
+    assert codes == [200, 200, 429]

@@ -52,7 +52,7 @@ Every question that was scored more than once got the same verdict each time. Q5
 
 | Measure | Result |
 | --- | --- |
-| Unit and integration tests | 111 passed |
+| Unit and integration tests | 113 passed |
 | Self-test: 40 cases with reference plans replayed | 40 of 40 |
 | Sector exposure fast path, uncached, 300 runs | p50 2.7 ms, p95 4.3 ms |
 | Exact-repeat cache hit, 300 runs | p50 0.015 ms |

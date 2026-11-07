@@ -10,9 +10,11 @@ from __future__ import annotations
 import copy
 import logging
 import re
+import threading
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 
 from .cache import AnswerCache, normalize_question
 from .config import Settings
@@ -98,6 +100,8 @@ class PortfolioAgent:
         self.cache = AnswerCache(self.settings.cache_size)
         self._system = build_system_prompt(self.catalog.render())
         self.llm = llm if llm is not None else self._default_llm()
+        self._budget = {"day": None, "used": 0}
+        self._budget_lock = threading.Lock()
 
     def _default_llm(self) -> LLMClient | None:
         try:
@@ -170,6 +174,20 @@ class PortfolioAgent:
             and not _NOT_SIMPLE.search(question)
         )
 
+    def _take_model_budget(self) -> bool:
+        """Count one question against the daily cap, shared by all users; resets at midnight UTC."""
+        limit = self.settings.daily_model_questions
+        if not limit:
+            return True
+        today = datetime.now(UTC).date()
+        with self._budget_lock:
+            if self._budget["day"] != today:
+                self._budget = {"day": today, "used": 0}
+            if self._budget["used"] >= limit:
+                return False
+            self._budget["used"] += 1
+            return True
+
     def _answer_with_model(self, question: str, links: Links) -> AgentResponse:
         if self.llm is None:
             return AgentResponse(
@@ -177,6 +195,14 @@ class PortfolioAgent:
                 STATUS_ERROR,
                 "This question needs the language model, and GEMINI_API_KEY is not set. "
                 "Sector exposure questions for a named portfolio still work without it.",
+                "model",
+            )
+        if not self._take_model_budget():
+            return AgentResponse(
+                question,
+                STATUS_ERROR,
+                "This demo has reached its daily limit for new questions. The example questions and sector "
+                "exposure questions for a named fund still work.",
                 "model",
             )
         started = time.perf_counter()

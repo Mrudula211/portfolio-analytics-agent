@@ -9,3 +9,5 @@ services:
         sync: false
       - key: DEMO_PASSWORD
         sync: false
+      - key: DAILY_MODEL_QUESTIONS
+        value: "300"

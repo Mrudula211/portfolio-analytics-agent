@@ -23,4 +23,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
   CMD python -c "import os,urllib.request as u; u.urlopen(f'http://127.0.0.1:{os.environ[\"PORT\"]}/api/health', timeout=2)"
 
 # One process is enough: requests run in a thread pool and spend their time waiting on the model.
-CMD ["sh", "-c", "exec uvicorn portfolio_agent.api:app --host 0.0.0.0 --port ${PORT} --proxy-headers --forwarded-allow-ips='*'"]
+CMD ["sh", "-c", "exec uvicorn portfolio_agent.api:app --host 0.0.0.0 --port ${PORT}"]
