@@ -39,7 +39,7 @@ def test_request_forces_tools_and_low_latency_settings(client, monkeypatch):
     response = client.plan("system text", "user text")
 
     config = captured["config"]
-    assert captured["model"] == "gemini-3.5-flash"
+    assert captured["model"] == "gemini-3.1-flash-lite"
     assert config.system_instruction == "system text" and config.temperature == 0.0
     assert config.tool_config.function_calling_config.mode == types.FunctionCallingConfigMode.ANY
     assert config.thinking_config.thinking_level == types.ThinkingLevel.MINIMAL
@@ -68,8 +68,8 @@ def test_falls_back_to_second_model_on_failure(client, monkeypatch):
         return _response(("decline", {"kind": "no_data", "message": "No."}))
 
     monkeypatch.setattr(client._client.models, "generate_content", fake)
-    assert client.plan("s", "u").model == "gemini-3.6-flash"
-    assert models == ["gemini-3.5-flash", "gemini-3.6-flash"]
+    assert client.plan("s", "u").model == "gemini-3.5-flash"
+    assert models == ["gemini-3.1-flash-lite", "gemini-3.5-flash"]
 
 
 def test_all_models_failing_raises_without_exposing_details(client, monkeypatch):
@@ -96,7 +96,7 @@ def test_slow_model_is_hedged_and_first_answer_wins(settings, monkeypatch):
     release = threading.Event()
 
     def fake(model, contents, config):
-        if model == "gemini-3.5-flash":
+        if model == "gemini-3.1-flash-lite":
             release.wait(2)
         return _response(("decline", {"kind": "no_data", "message": model}))
 
@@ -104,7 +104,7 @@ def test_slow_model_is_hedged_and_first_answer_wins(settings, monkeypatch):
     started = time.perf_counter()
     response = client.plan("s", "u")
     release.set()
-    assert response.model == "gemini-3.6-flash" and time.perf_counter() - started < 1
+    assert response.model == "gemini-3.5-flash" and time.perf_counter() - started < 1
 
 
 def test_fast_model_is_not_hedged(client, monkeypatch):
@@ -116,7 +116,7 @@ def test_fast_model_is_not_hedged(client, monkeypatch):
 
     monkeypatch.setattr(client._client.models, "generate_content", fake)
     client.plan("s", "u")
-    assert models == ["gemini-3.5-flash"]
+    assert models == ["gemini-3.1-flash-lite"]
 
 
 def test_overall_deadline_is_enforced(settings, monkeypatch):

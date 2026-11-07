@@ -15,9 +15,9 @@ load_dotenv(ROOT / ".env")
 @dataclass(frozen=True)
 class Settings:
     gemini_api_key: str = ""
-    # Chosen by measurement; see docs/DESIGN.md.
-    gemini_model: str = "gemini-3.5-flash"
-    gemini_fallback_models: tuple[str, ...] = ("gemini-3.6-flash", "gemini-3.1-flash-lite")
+    # Chosen by measurement on 7 Nov 2026: Lite was fastest and most reliable; see docs/DESIGN.md.
+    gemini_model: str = "gemini-3.1-flash-lite"
+    gemini_fallback_models: tuple[str, ...] = ("gemini-3.5-flash", "gemini-3.6-flash")
     llm_timeout_s: float = 12.0
     llm_hedge_delay_s: float = 2.5
     db_path: Path = ROOT / "portfolio_database.db"
