@@ -5,9 +5,9 @@ Ask questions about portfolio data in plain English. The agent writes and safely
 **At a glance**
 
 - **All four required parts are built:** SQL tool, exposure calculator, command-line agent and evaluator. A web UI and REST API come on top.
-- **On the brief's 10 questions (live run):** 8 fully correct, 1 partly correct (Q5) and 1 unscored because the model timed out (Q7).
-- **Across all 40 questions** (the 10 in the brief plus 30 more I wrote): 94.9% strict accuracy on the 39 scored, and the right tool chosen every time.
-- **Speed:** a median of 1.9 s when Gemini is needed, about 7 ms for sector exposure (which skips the model), and under 1 ms for repeat questions.
+- **On the brief's 10 questions (live run):** 8 correct, 1 partly correct (Q8) and 1 graded wrong (Q5); details below.
+- **Across all 40 questions** (the 10 in the brief plus 30 more I wrote): 95.0% strict accuracy (38 of 40), and the right tool chosen every time.
+- **Speed:** a median of 2.5 s when Gemini is needed, about 10 ms for sector exposure (which skips the model), and under 1 ms for repeat questions.
 - **Every failure and caveat is listed** under [Results](#results).
 
 ```text
@@ -100,31 +100,28 @@ Latency comes from what the system avoids:
 
 ### Live model accuracy and latency
 
-From `reports/live_extended.md`: 40 questions (the 10 in the brief plus 30 I wrote), Gemini free tier, cache off, run once on 6 November 2026.
+From [reports/live_extended.md](reports/live_extended.md), which records the full run. It ran on commit `467bafb` with no uncommitted changes, `python evaluate.py --extended --delay 4`, on 7 November 2026, 03:23 to 03:27 UTC, with the cache off and the Gemini free tier.
 
-| Measure | Result |
-| --- | --- |
-| Strict accuracy | **94.9%** (37 of 39 scored) |
-| Lenient accuracy, counting partial answers | 97.4% |
-| Correct tool chosen | 100% |
-| Safety, refusal and ambiguity cases handled | 10 of 10 |
-| Latency with a model call | p50 1.91 s, p95 5.72 s |
-| Latency without one (sector exposure fast path) | p50 7 ms |
-| Model calls per question | 0.85 |
+| Measure | Brief's 10 questions | All 40 questions |
+| --- | --- | --- |
+| Strict accuracy | 8 of 10 | **95.0%** (38 of 40, none unscored) |
+| Lenient, counting partial answers | 9 of 10 | 97.5% |
+| Correct tool chosen | 10 of 10 | 100% |
+| Safety, refusal and ambiguity cases | n/a | 10 of 10 |
 
-What did not pass, in full:
+| Latency | p50 | p95 |
+| --- | --- | --- |
+| With a model call (34 questions) | 2.49 s | 6.85 s |
+| Without one, sector exposure fast path (6 questions) | 10 ms | 12 ms |
 
-- **x06, wrong:** asked for the highest Sharpe ratio, the model looked in `risk_metrics`, and its repair substituted the Sortino ratio. The glossary now says which table holds each metric, and a new rule plus repair path makes the agent decline rather than substitute. The fix is tested offline; it has not yet had a full live re-run.
-- **Q5, partial:** a fallback model returned the right five holdings without `holding_id` and `quantity`.
-- **Q7, not scored:** every model was busy past the 12 s deadline, so it counts as an outage rather than an error.
+What did not pass:
 
-The tail latency comes from free-tier congestion: about half the answers came from the fallback model after the primary passed 2.5 s.
+- **Q5, graded wrong:** the agent returned the right five holdings in the right order, but added `portfolio_name` and left out `holding_id` and `quantity`. The grader gives "partial" only when every returned column also appears in the reference answer, so an extra column plus missing ones counts as a fail. That is arguably too harsh, but the grader was not changed after seeing the result.
+- **Q8, partial:** it found the right portfolio and sector count but not the reference's `total_holdings` and `diversification_ratio`. Expected: the glossary entry defining that ratio came from reading the ground truth, so it was removed before this run.
 
-**Changes since this run, not yet measured live.** These were made after seeing the results above, so the 30 extra questions are no longer a blind test:
+**Cost and conditions.** The run made 80 Gemini requests: 36 succeeded, 39 were rejected by the free tier's 20-a-day limit, and 5 hit server errors (503 or 504). That used 77,363 prompt tokens and 2,391 output tokens. Because `gemini-3.5-flash` ran out of quota part-way through, most of the 34 model-routed answers came from fallbacks (`gemini-3.1-flash-lite` 21, `gemini-3.5-flash` 10, `gemini-3.6-flash` 3). The two extra successful requests were hedges that finished after another model had already answered. That explains much of the tail latency. The system prompt's SHA-256 prefix is `781d7b712874fccf`.
 
-- Fixed x06 (the Sharpe ratio bug) and the "Apple" name matching.
-- Added a worked example for percentage questions, which affects the style of Q7.
-- Removed two glossary entries that had been written after reading the ground truth: the formula for "diversification metrics" (Q8) and the columns to show when listing holdings (Q5). No prompt content now comes from the ground truth. This may lower the scores on Q5 and Q8, and an honest lower score is the point.
+**Not blind.** Three fixes were made after seeing failures among the 30 extra questions (x06, x08 and a percentage example), so for them this is not a blind test. Nothing in the prompt comes from the ground truth.
 
 ### Measured without the model
 
