@@ -1,0 +1,32 @@
+[server]
+headless = true
+enableStaticServing = true  # Serves static/ (the Figtree font) at app/static/.
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"
+
+# Colours follow plindia.com; Figtree is the site's typeface, self-hosted under the SIL OFL.
+[theme]
+base = "light"
+primaryColor = "#1c2db8"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f5f6f9"
+textColor = "#16182b"
+linkColor = "#1c2db8"
+borderColor = "#e2e4ec"
+dataframeHeaderBackgroundColor = "#f8f9fc"
+showWidgetBorder = true
+baseRadius = "small"
+font = "Figtree"
+headingFont = "Figtree"
+
+[[theme.fontFaces]]
+family = "Figtree"
+url = "app/static/figtree-latin.woff2"
+weight = "400 700"
+
+[theme.sidebar]
+backgroundColor = "#f8f9fc"

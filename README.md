@@ -32,12 +32,12 @@ Note: Recorded weights and market values disagree by up to 11.2 points; the reco
 | Command-line agent that chooses a tool | [agent.py](portfolio_agent/agent.py) | `--trace` shows the tool chosen |
 | Evaluator against the ground truth | [evaluate.py](evaluate.py), [evaluation.py](portfolio_agent/evaluation.py) | `python evaluate.py`, or `--self-test` without an API key |
 | Brief documentation and a diagram | This page and [docs/](docs/) | Diagram below |
-| Clean code with error handling | 113 tests, the `ruff` linter, CI on every push | `pytest` |
+| Clean code with error handling | 116 tests, the `ruff` linter, CI on every push | `pytest` |
 
 **Optional enhancements:**
 - **SQL safety:** parameterised queries, validation before execution and graceful database errors.
 - **Operations:** logging, input validation and caching.
-- **Interfaces:** a web UI (FastAPI and HTML instead of Streamlit), a REST API and concurrent requests.
+- **Interfaces:** a Streamlit web UI, a REST API and concurrent requests.
 - **Evaluation:** scoring that favours efficient queries, and hybrid questions that use both tools.
 - **Metadata retrieval:** names in the question are matched to exact database values and added to the prompt. Retrieving parts of the schema was measured and rejected. See [docs/DESIGN.md](docs/DESIGN.md).
 
@@ -59,7 +59,8 @@ python -m portfolio_agent "How many portfolios do we have in total?"
 | Show SQL, route and timings | add `--trace` |
 | Evaluate: brief's 10, or all 40 | `python evaluate.py`, add `--extended` |
 | Check everything except the model, no key needed | `python evaluate.py --self-test --extended` |
-| Web UI and REST API | `uvicorn portfolio_agent.api:app`, then open http://127.0.0.1:8000 |
+| Web UI | `streamlit run streamlit_app.py`, then open http://localhost:8501 |
+| REST API | `uvicorn portfolio_agent.api:app`, then see http://127.0.0.1:8000/docs |
 | Tests and data audit | `pytest` and `python -m portfolio_agent --check-data` |
 
 The database is built from the CSVs on the first run.

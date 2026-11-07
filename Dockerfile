@@ -10,7 +10,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY portfolio_agent portfolio_agent
 COPY data data
-COPY database_schema.sql .
+COPY database_schema.sql streamlit_app.py ./
+COPY .streamlit .streamlit
+COPY static static
 COPY reports reports
 
 # Build the database into the image: fast start-up, and the running app only reads it.
@@ -20,7 +22,8 @@ RUN chown -R app:app /app
 USER app
 EXPOSE 7860
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
-  CMD python -c "import os,urllib.request as u; u.urlopen(f'http://127.0.0.1:{os.environ[\"PORT\"]}/api/health', timeout=2)"
+  CMD python -c "import os,urllib.request as u; u.urlopen(f'http://127.0.0.1:{os.environ[\"PORT\"]}/_stcore/health', timeout=2)"
 
-# One process is enough: requests run in a thread pool and spend their time waiting on the model.
-CMD ["sh", "-c", "exec uvicorn portfolio_agent.api:app --host 0.0.0.0 --port ${PORT}"]
+# The demo serves the Streamlit UI. For the REST API instead, run:
+# uvicorn portfolio_agent.api:app --host 0.0.0.0 --port ${PORT}
+CMD ["sh", "-c", "exec streamlit run streamlit_app.py --server.port ${PORT} --server.address 0.0.0.0"]

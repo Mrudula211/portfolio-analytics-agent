@@ -68,11 +68,21 @@ Two glossary entries were once written after reading the ground truth: the formu
 
 The 30 extra questions in `eval/extended_dataset.json` were written before any tuning, but three fixes (x06, x08 and the percentage example) were made after seeing failures there. They are therefore no longer a blind test. An honest number from here needs new questions the agent has never been tuned on.
 
-## Web UI: FastAPI with plain HTML, not Streamlit
+## Web UI: Streamlit, with a separate REST API
 
-Streamlit was suggested and would have been quicker to write. A static page on the API needs no second service, adds no per-interaction server re-run, and lets the page apply a strict Content Security Policy. The cost is more hand-written front-end code.
+The brief suggests Streamlit, and it replaced an earlier hand-written HTML and JavaScript page: about 550 lines of front-end code became one Python file, `streamlit_app.py`. The app calls the agent in-process, through a single shared instance per server, so the UI and the command line run exactly the same code. The REST API (`portfolio_agent/api.py`) remains for programmatic use. It is no longer what the demo serves.
 
-The page follows plindia.com's palette (royal blue, navy, teal) and its Figtree typeface, self-hosted so the security policy can stay strict. It also shows the live evaluation results and the data findings, so a reviewer sees how the agent is tested without opening the repository.
+The UI is laid out as a workspace rather than a landing page:
+- **Sidebar:** example questions, dataset facts and the data notes.
+- **Query tab:** the answer appears above the fold. It shows the route taken and the time, then tables, exposure charts with tooltips, and the SQL behind each answer.
+- **Evaluation tab:** the live results, by category and for every question.
+
+Colours follow plindia.com, and its Figtree typeface is self-hosted. Text from users or the database is escaped before display, so it can never be interpreted as Markdown or HTML.
+
+**The trade-offs:**
+- Streamlit re-runs the script on every interaction. The agent and dataset facts are cached, so a re-run is cheap.
+- Its look can only be adjusted so far.
+- It cannot send HTTP Basic auth challenges, so the demo password is a sign-in form instead.
 
 ## Stored plans for demo questions
 
@@ -109,9 +119,9 @@ Model-written SQL is treated as untrusted:
 - Blocked queries are refused and never sent back for repair.
 - Query results and stored free text never reach the model, so data cannot act as a prompt injection, and a failed query returns only the database's error message.
 - The agent declines recommendations, forecasts and anything outside the data. It asks when a name could mean several funds.
-- The public API limits each client to 20 questions a minute. It identifies clients by the address the hosting proxy recorded: the rightmost `X-Forwarded-For` entry, which a client cannot forge.
+- The web app and the API limit each client to 20 questions a minute. They identify clients by the address the hosting proxy recorded: the rightmost `X-Forwarded-For` entry, which a client cannot forge.
 - A daily cap on questions sent to Gemini, shared by all users (`DAILY_MODEL_QUESTIONS`, 300 on Render), stops one visitor from using up the day's quota. The cached example questions keep working past the cap.
-- Security headers are set, and the UI inserts data as text only.
+- The UI escapes text from users and the database before display.
 
 **Data governance.** On Gemini's free tier, Google may use prompts to improve its products. Here a prompt contains only the schema, a short glossary, matched names and the user's question, never query results or holdings. A production deployment on client data would use a paid, enterprise or self-hosted model endpoint covered by a data-processing agreement.
 
@@ -123,13 +133,13 @@ curl -X POST http://127.0.0.1:8000/api/ask \
   -d '{"question":"What are the sector exposures for the Tech Innovation Fund?"}'
 ```
 
-The response includes `status`, `answer`, `route`, `steps` (SQL, rows, exposures), `warnings`, `timings_ms` and `llm`. Also available: `GET /api/health`, `GET /api/about` and `GET /docs`.
+The response includes `status`, `answer`, `route`, `steps` (SQL, rows, exposures), `warnings`, `timings_ms` and `llm`. Also available: `GET /api/health` and `GET /docs`. Run it with `uvicorn portfolio_agent.api:app`.
 
 ## Deploy
 
-The container serves the UI and API from one process and contains its own database.
+The container serves the Streamlit app and contains its own database. Its health check is Streamlit's `/_stcore/health`.
 
-- **Render (free):** in the Render dashboard choose **New > Blueprint**, select this repository, and set `GEMINI_API_KEY`. The Blueprint sets `DAILY_MODEL_QUESTIONS` to 300. Set `DEMO_PASSWORD` to require a password (any username) for everything except the health check. The free plan sleeps after about 15 idle minutes, so the first visit after a pause takes up to a minute.
+- **Render (free):** in the Render dashboard choose **New > Blueprint**, select this repository, and set `GEMINI_API_KEY`. The Blueprint sets `DAILY_MODEL_QUESTIONS` to 300. Set `DEMO_PASSWORD` to show a sign-in form before anything else loads. The free plan sleeps after about 15 idle minutes, so the first visit after a pause takes up to a minute.
 - **Any container host:** `docker build -t portfolio-agent . && docker run -p 7860:7860 -e GEMINI_API_KEY=... portfolio-agent`
 
 ## Project layout
@@ -146,8 +156,13 @@ portfolio_agent/
   cache.py        exact-match cache
   db.py           database build and data audit
   evaluation.py   scoring
-  api.py, static/ REST API and web UI
+  api.py          REST API
+  demo.py         stored demo plans, dataset facts, evaluation report
+  ratelimit.py    per-client rate limiting
   demo_plans.json Gemini's stored plans for the UI's example questions
+streamlit_app.py web UI
+.streamlit/      UI theme
+static/           self-hosted font
 evaluate.py       evaluation command
 eval/             the 30 extra evaluation questions
 scripts/          stored demo plans

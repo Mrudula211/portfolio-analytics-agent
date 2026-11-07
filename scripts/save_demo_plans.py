@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from portfolio_agent import PortfolioAgent  # noqa: E402
-from portfolio_agent.api import DEMO_PLANS  # noqa: E402
+from portfolio_agent.demo import DEMO_PLANS  # noqa: E402
 from portfolio_agent.prompts import build_user_prompt  # noqa: E402
 
 # None of these are evaluation questions; tests/test_no_leakage.py enforces it.

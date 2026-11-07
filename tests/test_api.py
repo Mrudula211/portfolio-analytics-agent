@@ -49,16 +49,8 @@ def test_rate_limit_is_per_client():
     assert limiter.allow("a") and limiter.allow("b") and not limiter.allow("a")
 
 
-def test_health_and_ui(client):
-    assert client.get("/api/health").json()["status"] == "ok"
-    page = client.get("/")
-    assert page.status_code == 200 and "Portfolio Analytics" in page.text
-
-
-def test_security_headers_present(client):
-    headers = client.get("/").headers
-    assert "default-src 'self'" in headers["content-security-policy"]
-    assert headers["x-content-type-options"] == "nosniff"
+def test_health(client):
+    assert client.get("/api/health").json() == {"status": "ok", "model_configured": True}
 
 
 def test_concurrent_requests_succeed(client):
@@ -70,13 +62,6 @@ def test_concurrent_requests_succeed(client):
 
     with ThreadPoolExecutor(max_workers=16) as pool:
         assert set(pool.map(call, range(100))) == {"ok"}
-
-
-def test_about_lists_examples_data_notes_and_evaluation(client):
-    about = client.get("/api/about").json()
-    assert about["examples"] and about["model_configured"] is True
-    assert any("98" in note for note in about["data_notes"])
-    assert "evaluation" in about
 
 
 def test_stored_plan_answers_without_a_model_call(make_agent):
@@ -99,12 +84,13 @@ def test_demo_password_protects_everything_but_health(settings, make_agent):
     agent = make_agent()
     agent.settings = dataclasses.replace(settings, demo_password="s3cret")
     with TestClient(create_app(agent)) as protected:
-        assert protected.get("/").status_code == 401
+        payload = {"question": "sector exposure of Balanced Portfolio"}
+        assert protected.post("/api/ask", json=payload).status_code == 401
         assert protected.get("/api/health").status_code == 200
         wrong = {"Authorization": "Basic " + base64.b64encode(b"x:nope").decode()}
         right = {"Authorization": "Basic " + base64.b64encode(b"reviewer:s3cret").decode()}
-        assert protected.get("/", headers=wrong).status_code == 401
-        assert protected.get("/", headers=right).status_code == 200
+        assert protected.post("/api/ask", json=payload, headers=wrong).status_code == 401
+        assert protected.post("/api/ask", json=payload, headers=right).status_code == 200
 
 
 def test_rate_limit_ignores_forged_forwarded_addresses(client):

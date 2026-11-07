@@ -45,7 +45,7 @@ def _table(columns: list[str], rows: list[list]) -> str:
     return "\n".join([line(columns), line(["-" * w for w in widths]), *(line(r) for r in cells)])
 
 
-def _safe_title(title: str, question: str) -> str:
+def safe_title(title: str, question: str) -> str:
     """Drop a model-written label that contains a figure the user did not state."""
     title = " ".join((title or "").split())[:120]
     if set(re.findall(r"\d+(?:\.\d+)?", title)) - set(re.findall(r"\d+(?:\.\d+)?", question)):
@@ -54,7 +54,7 @@ def _safe_title(title: str, question: str) -> str:
 
 
 def render_sql(result: QueryResult, title: str, question: str) -> str:
-    label = _safe_title(title, question)
+    label = safe_title(title, question)
     prefix = f"{label}\n" if label else ""
     if not result.rows:
         return f"{prefix}No matching records were found."

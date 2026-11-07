@@ -3,7 +3,7 @@ services:
     name: portfolio-analytics-agent
     runtime: docker
     plan: free
-    healthCheckPath: /api/health
+    healthCheckPath: /_stcore/health
     envVars:
       - key: GEMINI_API_KEY
         sync: false

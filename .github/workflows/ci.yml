@@ -26,13 +26,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker build -t portfolio-agent .
-      - name: Container starts and answers without an API key
+      - name: Container starts and serves the Streamlit app without an API key
         run: |
           docker run -d --name agent -p 7860:7860 portfolio-agent
-          for attempt in $(seq 1 30); do
-            curl -fs http://127.0.0.1:7860/api/health && break
+          for attempt in $(seq 1 60); do
+            curl -fs http://127.0.0.1:7860/_stcore/health && break
             sleep 1
           done
-          curl -fs -X POST http://127.0.0.1:7860/api/ask \
-            -H 'Content-Type: application/json' \
-            -d '{"question":"Sector exposure of Balanced Portfolio"}' | grep -q '"route":"fast_path"'
+          curl -fs http://127.0.0.1:7860/_stcore/health | grep -q ok
+          curl -fs http://127.0.0.1:7860/ | grep -qi "<title>"
+          curl -fs -o /dev/null http://127.0.0.1:7860/app/static/figtree-latin.woff2
