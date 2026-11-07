@@ -8,6 +8,7 @@ portfolio_database.db.*
 *.pdf
 reports/*.json
 !reports/live_extended.json
+!reports/live.json
 reports/self_test*
 .ruff_cache/
 .vscode/

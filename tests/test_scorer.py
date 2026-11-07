@@ -161,5 +161,15 @@ def test_stability_counts_questions_whose_verdict_changes():
 
     runs = [result("a", EXACT), result("b", EXACT), result("a", EQUIVALENT), result("b", FAIL)]
     stability = summarize(runs)["stability"]
-    assert stability == {"questions": 2, "consistent": 1, "unstable": ["b"]}
+    assert stability == {"questions": 2, "consistent": 1, "unstable": ["b"], "scored_once": []}
     assert summarize(runs[:2])["stability"] is None
+
+
+def test_stability_ignores_questions_whose_other_runs_were_outages():
+    from portfolio_agent.evaluation import INFRA_ERROR, CaseResult
+
+    def result(case_id, verdict):
+        return CaseResult(case_id, "c", "-", "q", verdict, "", True, "model", "ok", 1.0, 1.0, 1)
+
+    runs = [result("a", EXACT), result("a", EXACT), result("b", FAIL), result("b", INFRA_ERROR)]
+    assert summarize(runs)["stability"] == {"questions": 1, "consistent": 1, "unstable": [], "scored_once": ["b"]}

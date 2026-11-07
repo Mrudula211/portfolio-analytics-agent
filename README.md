@@ -7,7 +7,8 @@ Ask questions about portfolio data in plain English. The agent writes and safely
 - **All four required parts are built:** SQL tool, exposure calculator, command-line agent and evaluator. A web UI and REST API come on top.
 - **On the brief's 10 questions (live run):** 8 correct, 1 partly correct (Q8) and 1 graded wrong (Q5); details below.
 - **Across all 40 questions** (the 10 in the brief plus 30 more I wrote): 95.0% strict accuracy (38 of 40), and the right tool chosen every time.
-- **Speed:** a median of 2.5 s when Gemini is needed, about 10 ms for sector exposure (which skips the model), and under 1 ms for repeat questions.
+- **Speed:** under 1 ms for repeat questions and about 10 ms for sector exposure, which skips the model. Questions that need Gemini are not fast: a median of 2.5 to 4.6 s on the free tier, because almost all of that time is spent waiting for Gemini.
+- **Consistency:** the same 8 of the brief's 10 questions passed in all three live runs. Q5 and Q8 were never fully correct.
 - **Every failure and caveat is listed** under [Results](#results).
 
 ```text
@@ -37,7 +38,7 @@ Design decisions and trade-offs are in [docs/DESIGN.md](docs/DESIGN.md).
 | Working agent on the command line | `python -m portfolio_agent "<question>"`, or no question for an interactive prompt |
 | Evaluation script against the ground truth | `python evaluate.py`; results in [reports/live_extended.md](reports/live_extended.md) |
 | Brief documentation with a design diagram | This README (diagram under "How it works") and [docs/DESIGN.md](docs/DESIGN.md) |
-| Clean code with error handling | 110 tests and the `ruff` linter run in CI on every push; database, model and input errors become plain messages instead of crashes |
+| Clean code with error handling | 111 tests and the `ruff` linter run in CI on every push; database, model and input errors become plain messages instead of crashes |
 
 Optional enhancements from the brief, also done: parameterised queries, query validation, graceful database errors, logging, input validation, caching, a graphical interface (a web UI rather than Streamlit; see [docs/DESIGN.md](docs/DESIGN.md)), a REST API, concurrent requests, scoring that favours efficient queries, and hybrid questions using both tools. RAG was measured and deliberately not used; the reasons are in [docs/DESIGN.md](docs/DESIGN.md).
 
@@ -121,13 +122,27 @@ What did not pass:
 
 **Cost and conditions.** The run made 80 Gemini requests: 36 succeeded, 39 were rejected by the free tier's 20-a-day limit, and 5 hit server errors (503 or 504). That used 77,363 prompt tokens and 2,391 output tokens. Because `gemini-3.5-flash` ran out of quota part-way through, most of the 34 model-routed answers came from fallbacks (`gemini-3.1-flash-lite` 21, `gemini-3.5-flash` 10, `gemini-3.6-flash` 3). The two extra successful requests were hedges that finished after another model had already answered. That explains much of the tail latency. The system prompt's SHA-256 prefix is `781d7b712874fccf`.
 
+### Stability: three runs of the brief's 10 questions
+
+The main run above, plus two more on 7 November 2026, 04:06 to 04:10 UTC, using `python evaluate.py --runs 2 --delay 13` on commit `d13d12b`. The two extra runs used a different API key and Google project, after the first project's daily quota ran out; the prompt and code were unchanged (prompt hash `781d7b712874fccf`). Their report is [reports/live.md](reports/live.md).
+
+| Question | Main run | Run 2 | Run 3 |
+| --- | --- | --- | --- |
+| Q1 to Q4, Q6, Q7, Q9, Q10 | pass | pass | pass |
+| Q5, top 5 holdings | fail | partial | partial |
+| Q8, diversification metrics | partial | fail | not scored (model timed out) |
+
+The same 8 questions passed every time. Q5 and Q8 were never fully correct and varied between runs. In run 2, Q8 reported risk metrics such as beta as its "diversification metrics". They have not been tuned for, because the fix would be teaching the prompt the answer key.
+
+**Latency is set by the free tier, not by the agent.** In runs 2 and 3, answers that needed Gemini took a median of 4.57 s (p95 7.01 s), against 2.49 s in the main run. Of 41 Gemini requests, 16 failed: 9 hit the free tier's limits (429) and 7 were server errors (503 or 504), and each failure meant waiting for a fallback model. The agent's own work, the database query and formatting, takes about a millisecond. A paid tier would remove most of the rate limiting. That has not been measured here, so no figure is claimed.
+
 **Not blind.** Three fixes were made after seeing failures among the 30 extra questions (x06, x08 and a percentage example), so for them this is not a blind test. Nothing in the prompt comes from the ground truth.
 
 ### Measured without the model
 
 | Measure | Result |
 | --- | --- |
-| Unit and integration tests | 110 passed |
+| Unit and integration tests | 111 passed |
 | Scorer self-test, 40 cases with reference plans replayed | 40 of 40 |
 | Sector exposure fast path, uncached, 300 runs | p50 2.7 ms, p95 4.3 ms |
 | Exact-repeat cache hit, 300 runs | p50 0.015 ms |

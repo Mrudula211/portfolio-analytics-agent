@@ -360,15 +360,21 @@ def _percentile(values: list[float], fraction: float) -> float:
 
 def _stability(results: list[CaseResult]) -> dict | None:
     """With --runs above 1: how many questions got the same verdict every time they were scored."""
-    verdicts: dict[str, set[str]] = defaultdict(set)
-    counts = Counter(r.id for r in results)
-    if max(counts.values(), default=1) < 2:
+    if max(Counter(r.id for r in results).values(), default=1) < 2:
         return None
+    verdicts: dict[str, list[str]] = defaultdict(list)
     for r in results:
         if r.verdict != INFRA_ERROR:
-            verdicts[r.id].add("pass" if r.verdict in _PASSING else r.verdict)
-    unstable = sorted(case for case, seen in verdicts.items() if len(seen) > 1)
-    return {"questions": len(verdicts), "consistent": len(verdicts) - len(unstable), "unstable": unstable}
+            verdicts[r.id].append("pass" if r.verdict in _PASSING else r.verdict)
+    # A question scored only once (its other runs were outages) proves nothing about stability.
+    repeated = {case: set(seen) for case, seen in verdicts.items() if len(seen) > 1}
+    unstable = sorted(case for case, seen in repeated.items() if len(seen) > 1)
+    return {
+        "questions": len(repeated),
+        "consistent": len(repeated) - len(unstable),
+        "unstable": unstable,
+        "scored_once": sorted(set(verdicts) - set(repeated)),
+    }
 
 
 def summarize(results: list[CaseResult]) -> dict:
@@ -444,8 +450,12 @@ def load_finished(report: Path) -> list[CaseResult]:
 def _stability_text(stability: dict | None) -> str:
     if stability is None:
         return "single run"
-    unstable = f"; varied: {', '.join(stability['unstable'])}" if stability["unstable"] else ""
-    return f"{stability['consistent']} of {stability['questions']}{unstable}"
+    text = f"{stability['consistent']} of {stability['questions']} scored more than once"
+    if stability["unstable"]:
+        text += f"; varied: {', '.join(stability['unstable'])}"
+    if stability["scored_once"]:
+        text += f"; scored once (outages): {', '.join(stability['scored_once'])}"
+    return text
 
 
 def write_report(results: list[CaseResult], summary: dict, meta: dict, directory: Path, stem: str) -> Path:
