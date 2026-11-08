@@ -8,6 +8,7 @@ here, because accuracy measured on memorised answers would say nothing about new
 from __future__ import annotations
 
 from .metadata import GLOSSARY, Links
+from .semantics import ASSESSMENT_DIVERSIFICATION
 
 _RULES = """\
 You translate questions about an investment portfolio database into tool calls. Reply only with tool calls.
@@ -27,6 +28,8 @@ or names something that could be several portfolios (ambiguous, listing them). N
 Writing SQL (SQLite dialect):
 - One SELECT or WITH statement. Use only the tables and columns listed. Reference names and listed values exactly.
 - Select what was asked, plus the portfolio or security name that identifies each row. No SELECT *.
+- For holding-level row lists (not counts or other aggregates), include holding_id, security symbol, company_name,
+  quantity, and every field the user asks to display or uses to rank the rows. Keep top-N ordering and LIMIT.
 - A question asking for a total, count or average returns that single aggregate, not the underlying rows.
 - When reporting a share or percentage, also select the two values it is calculated from.
 - Use ROUND only when the question asks for rounded figures or a percentage.
@@ -58,7 +61,8 @@ total_aum ASC LIMIT 1, then exposure_calculator: use_previous_sql_result=true
 
 def build_system_prompt(schema: str) -> str:
     """Static content only, so identical prefixes are eligible for provider-side caching."""
-    return f"{_RULES}\n\nDatabase:\n{schema}\n\nDefinitions:\n{GLOSSARY}\n\n{_EXAMPLES}"
+    definitions = f"{GLOSSARY}\n- {ASSESSMENT_DIVERSIFICATION.description}"
+    return f"{_RULES}\n\nDatabase:\n{schema}\n\nDefinitions:\n{definitions}\n\n{_EXAMPLES}"
 
 
 def _clean(question: str) -> str:
@@ -80,9 +84,10 @@ def build_user_prompt(question: str, links: Links) -> str:
 
 
 def build_repair_prompt(question: str, links: Links, failed_sql: str, error: str) -> str:
-    """A fresh, stateless prompt: only the database's error text goes back, never result data."""
+    """A fresh prompt with SQL or row-free validation feedback, never database result rows."""
     return (
         f"{build_user_prompt(question, links)}\n<failed_sql>{failed_sql}</failed_sql>\n"
-        f"<database_error>{error}</database_error>\n"
-        "Call run_sql with a corrected query for the same question, or decline if the data does not hold it."
+        f"<query_issue>{error}</query_issue>\n"
+        "Call run_sql with a corrected query for the same question that satisfies the requested output and "
+        "definitions, or decline if the data does not hold it. Do not substitute a different metric."
     )

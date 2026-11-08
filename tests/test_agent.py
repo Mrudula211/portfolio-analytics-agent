@@ -229,3 +229,100 @@ def test_daily_model_cap_is_shared_but_spares_cache_and_fast_path(settings):
     assert limited.status == "error" and "daily limit" in limited.answer
     assert agent.answer_question(questions[0]).route == "cache"
     assert agent.answer_question("sector exposure of Balanced Portfolio").route == "fast_path"
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Show me the top 5 holdings by cost basis in the Growth Equity Fund",
+        "List the five Growth Equity Fund positions ranked by cost basis",
+    ],
+)
+def test_holding_row_projection_is_validated_and_repaired(make_agent, question):
+    from portfolio_agent.evaluation import Evaluator, load_ground_truth
+
+    incomplete = """SELECT s.symbol, s.company_name, h.cost_basis
+                    FROM holdings h JOIN securities s ON s.security_id=h.security_id
+                    JOIN portfolios p ON p.portfolio_id=h.portfolio_id
+                    WHERE p.portfolio_name='Growth Equity Fund'
+                    ORDER BY h.cost_basis DESC LIMIT 5"""
+    complete = """SELECT h.holding_id, s.symbol, s.company_name, h.quantity, h.cost_basis
+                   FROM holdings h JOIN securities s ON s.security_id=h.security_id
+                   JOIN portfolios p ON p.portfolio_id=h.portfolio_id
+                   WHERE p.portfolio_name='Growth Equity Fund'
+                   ORDER BY h.cost_basis DESC LIMIT 5"""
+    agent = make_agent({question: [sql_call(incomplete)]}, [complete])
+    reply = agent.answer_question(question, use_cache=False)
+    assert reply.status == "ok"
+    assert reply.llm["calls"] == 2
+    assert reply.steps[-1].columns == ["holding_id", "symbol", "company_name", "quantity", "cost_basis"]
+    assert len(reply.steps[-1].rows) == 5
+    assert "holding-level output is missing" in agent.llm.prompts[-1]
+    ground_truth = load_ground_truth(agent.settings.data_dir.parent / "ground_truth_dataset.json")
+    case = next(c for c in ground_truth if c.id == "gt05")
+    if question == case.question:
+        assert Evaluator(agent, agent.settings.data_dir)._grade(case, reply)[0] == "exact"
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Find portfolios that have holdings in more than 5 different sectors and show their diversification metrics",
+        "Which portfolios have more than five stock sectors, and what is their sector diversification ratio?",
+    ],
+)
+def test_assessment_diversification_definition_is_independently_verified(make_agent, question):
+    from portfolio_agent.evaluation import Evaluator, load_ground_truth
+
+    wrong = """SELECT p.portfolio_name,
+                      COUNT(DISTINCT s.sector_id) AS sector_count,
+                      COUNT(h.holding_id) AS total_holdings,
+                      ROUND(1.0 / COUNT(h.holding_id), 3) AS diversification_ratio
+               FROM portfolios p JOIN holdings h ON h.portfolio_id=p.portfolio_id
+               JOIN securities s ON s.security_id=h.security_id
+               GROUP BY p.portfolio_id HAVING sector_count > 5"""
+    correct = """SELECT p.portfolio_name,
+                        COUNT(DISTINCT CASE WHEN s.asset_type='Stock' THEN s.sector_id END) AS sector_count,
+                        COUNT(h.holding_id) AS total_holdings,
+                        ROUND(CAST(COUNT(DISTINCT CASE WHEN s.asset_type='Stock' THEN s.sector_id END) AS REAL)
+                              / COUNT(h.holding_id), 3) AS diversification_ratio
+                 FROM portfolios p JOIN holdings h ON h.portfolio_id=p.portfolio_id
+                 JOIN securities s ON s.security_id=h.security_id
+                 GROUP BY p.portfolio_id HAVING sector_count > 5"""
+    agent = make_agent({question: [sql_call(wrong)]}, [correct])
+    reply = agent.answer_question(question, use_cache=False)
+    assert reply.status == "ok"
+    assert reply.llm["calls"] == 2
+    assert reply.steps[-1].columns == ["portfolio_name", "sector_count", "total_holdings", "diversification_ratio"]
+    assert "assessment-defined diversification calculation" in agent.llm.prompts[-1]
+    assert "diversification_ratio" in agent._system
+    ground_truth = load_ground_truth(agent.settings.data_dir.parent / "ground_truth_dataset.json")
+    case = next(c for c in ground_truth if c.id == "gt08")
+    if question == case.question:
+        assert Evaluator(agent, agent.settings.data_dir)._grade(case, reply)[0] == "exact"
+
+
+def test_discovered_exposure_request_completes_sql_and_calculator(settings, make_agent):
+    from portfolio_agent.evaluation import Evaluator, load_extended
+
+    case = next(c for c in load_extended(settings.data_dir.parent / "eval" / "extended_dataset.json") if c.id == "x20")
+    wrong_global_latest = """SELECT p.portfolio_name FROM risk_metrics r
+                             JOIN portfolios p ON p.portfolio_id=r.portfolio_id
+                             WHERE r.calculation_date=(SELECT MAX(calculation_date) FROM risk_metrics)
+                             ORDER BY r.beta DESC LIMIT 1"""
+    latest_per_portfolio = """WITH latest AS (
+                                 SELECT portfolio_id, MAX(calculation_date) AS max_date
+                                 FROM risk_metrics GROUP BY portfolio_id)
+                             SELECT p.portfolio_name FROM risk_metrics r
+                             JOIN latest l ON l.portfolio_id=r.portfolio_id AND l.max_date=r.calculation_date
+                             JOIN portfolios p ON p.portfolio_id=r.portfolio_id
+                             ORDER BY r.beta DESC LIMIT 1"""
+    agent = make_agent({case.question: [sql_call(wrong_global_latest)]}, [latest_per_portfolio])
+    evaluator = Evaluator(agent, settings.data_dir)
+    paraphrase = "Show the sector mix of the portfolio with max beta"
+    assert agent._requires_hybrid(paraphrase, agent.linker.link(paraphrase))
+    reply = agent.answer_question(case.question, use_cache=False)
+    verdict, detail, tools_correct = evaluator._grade(case, reply)
+    assert verdict == "exact", detail
+    assert tools_correct
+    assert [step.tool for step in reply.steps] == ["run_sql", "exposure_calculator"]

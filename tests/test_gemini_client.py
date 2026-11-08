@@ -128,3 +128,33 @@ def test_overall_deadline_is_enforced(settings, monkeypatch):
         client.plan("s", "u")
     release.set()
     assert time.perf_counter() - started < 1
+
+
+def test_provider_failures_are_classified_without_exposing_raw_messages():
+    from portfolio_agent.llm import _failure_category
+
+    class ProviderError(Exception):
+        def __init__(self, status_code):
+            self.status_code = status_code
+
+    assert _failure_category(TimeoutError("sensitive provider text")) == "timeout"
+    assert _failure_category(ProviderError(429)) == "rate_limit"
+    assert _failure_category(ProviderError(503)) == "provider_unavailable"
+    assert _failure_category(ProviderError(504)) == "provider_timeout"
+    assert _failure_category(ProviderError(400)) == "api_or_network_error"
+
+
+def test_all_model_failures_preserve_aggregated_category(client, monkeypatch):
+    errors = iter([TimeoutError("timeout"), RuntimeError("api error"), TimeoutError("timeout")])
+
+    def fail(*args, **kwargs):
+        raise next(errors)
+
+    monkeypatch.setattr(client, "_call", fail)
+    client._models = ["one", "two", "three"]
+    client._hedge_delay_s = 0
+    client._deadline_s = 2
+    with pytest.raises(LLMError) as caught:
+        client.plan("system", "question")
+    assert caught.value.category == "api_or_network_error+timeout"
+    assert "timeout" not in str(caught.value)

@@ -153,6 +153,30 @@ def test_infra_errors_are_not_counted_as_wrong_answers(settings, make_agent):
     assert summary["cases_scored"] == 0 and summary["infra_errors"] == 1
 
 
+def test_infrastructure_failure_categories_are_reported_separately():
+    from portfolio_agent.evaluation import CaseResult
+
+    def infra(category):
+        return CaseResult(
+            "x",
+            "c",
+            "-",
+            "q",
+            "infra_error",
+            "model unreachable",
+            False,
+            "model",
+            "error",
+            1,
+            1,
+            0,
+            infra_category=category,
+        )
+
+    summary = summarize([infra("timeout"), infra("rate_limit"), infra("timeout")])
+    assert summary["infra_categories"] == {"timeout": 2, "rate_limit": 1}
+
+
 def test_stability_counts_questions_whose_verdict_changes():
     from portfolio_agent.evaluation import CaseResult
 

@@ -245,6 +245,7 @@ class CaseResult:
     reference_vm_steps: int = 0
     efficiency: float | None = None  # Reference work / agent work, capped at 1.
     full_scans: int = 0
+    infra_category: str = ""
 
 
 def _sql_steps(reply: AgentResponse) -> list[Step]:
@@ -323,6 +324,7 @@ class Evaluator:
             reply.llm.get("calls", 0),
             reply.llm.get("model", "") or "",
             sql,
+            infra_category=reply.llm.get("failure_category", "") if verdict == INFRA_ERROR else "",
         )
         if steps and case.sql:
             result.vm_steps = steps[-1].vm_steps
@@ -403,6 +405,9 @@ def summarize(results: list[CaseResult]) -> dict:
     return {
         "cases_scored": len(scored),
         "infra_errors": len(results) - len(scored),
+        "infra_categories": dict(
+            Counter(r.infra_category or "unclassified" for r in results if r.verdict == INFRA_ERROR)
+        ),
         "strict_accuracy": round(passing / total, 4),
         "lenient_accuracy": round((passing + partial) / total, 4),
         "tool_selection_accuracy": round(sum(r.tool_correct for r in scored) / total, 4),
@@ -470,6 +475,7 @@ def write_report(results: list[CaseResult], summary: dict, meta: dict, directory
         "| --- | --- |",
         f"| Cases scored | {summary['cases_scored']} |",
         f"| Model/infrastructure errors (not scored) | {summary['infra_errors']} |",
+        f"| Infrastructure categories | {summary.get('infra_categories', {})} |",
         f"| Strict accuracy | {summary['strict_accuracy']:.1%} |",
         f"| Lenient accuracy (includes partial) | {summary['lenient_accuracy']:.1%} |",
         f"| Tool selection accuracy | {summary['tool_selection_accuracy']:.1%} |",

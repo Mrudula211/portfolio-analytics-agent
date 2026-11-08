@@ -64,7 +64,7 @@ Testing found a real bug here: an allow-list of table names also rejected `COUNT
 
 The worked examples in the prompt deliberately use other questions and tables than the evaluation sets, and tests enforce this, both for prompts and for the UI's stored demo questions.
 
-Two glossary entries were once written after reading the ground truth: the formula for "diversification metrics" (Q8) and the columns to show when listing holdings (Q5). They helped exactly those questions, which made the score partly a measure of the answer key. Both were removed, so nothing in the prompt now comes from the ground truth, even if that costs those two questions.
+The original assessment leaves Q5's projection expectations and Q8's ratio semantics underspecified in the question text, while its provided reference defines them. The current implementation adds generic holding-row projection rules and an explicitly labelled, assessment-defined sector-diversification ratio. It includes the stated formula and field meanings, but does not include the assessment question text, question IDs, reference SQL, or expected answer rows. Deterministic checks compare generated results with a separate calculation from holding facts. These two cases are now informed by the assessment requirements and should not be described as blind tests; their purpose is to check that the app follows the stated acceptance criteria and remains correct on paraphrases.
 
 The 30 extra questions in `eval/extended_dataset.json` were written before any tuning, but three fixes (x06, x08 and the percentage example) were made after seeing failures there. They are therefore no longer a blind test. An honest number from here needs new questions the agent has never been tuned on.
 

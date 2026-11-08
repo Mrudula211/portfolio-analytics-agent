@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import socket
 import time
+from collections import Counter
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from typing import Protocol
@@ -18,6 +20,31 @@ log = logging.getLogger(__name__)
 
 class LLMError(Exception):
     """The model could not be reached or returned nothing usable."""
+
+    def __init__(self, message: str, *, category: str = "llm_error"):
+        self.category = category
+        super().__init__(message)
+
+
+def _failure_category(error: Exception) -> str:
+    """Classify provider failures without putting raw provider messages in user-visible reports."""
+    if isinstance(error, (TimeoutError, socket.timeout)) or "timeout" in type(error).__name__.casefold():
+        return "timeout"
+    response = getattr(error, "response", None)
+    status = getattr(error, "status_code", None) or getattr(error, "code", None)
+    if status is None and response is not None:
+        status = getattr(response, "status_code", None)
+    try:
+        status = int(status)
+    except (TypeError, ValueError):
+        status = None
+    if status == 429:
+        return "rate_limit"
+    if status == 503:
+        return "provider_unavailable"
+    if status == 504:
+        return "provider_timeout"
+    return "api_or_network_error"
 
 
 @dataclass
@@ -164,6 +191,7 @@ class GeminiClient:
         waiting = list(self._models)
         running: dict[Future, str] = {}
         last_error: Exception | None = None
+        failure_categories: Counter[str] = Counter()
         hedge_due = False
         while waiting or running:
             if waiting and (not running or hedge_due):
@@ -172,6 +200,7 @@ class GeminiClient:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 last_error = last_error or TimeoutError("deadline")
+                failure_categories["timeout"] += 1
                 break
             timeout = min(self._hedge_delay_s, remaining) if waiting else remaining
             done, _ = wait(running, timeout=timeout, return_when=FIRST_COMPLETED)
@@ -182,6 +211,7 @@ class GeminiClient:
                     result = future.result()
                 except Exception as exc:  # The SDK raises many error types; each means use another model.
                     last_error = exc
+                    failure_categories[_failure_category(exc)] += 1
                     log.warning("llm_call_failed model=%s error=%s", model, type(exc).__name__)
                     continue
                 for other in running:
@@ -189,7 +219,8 @@ class GeminiClient:
                 return result
         for other in running:
             other.cancel()
-        raise LLMError(f"All models failed: {type(last_error).__name__}") from last_error
+        category = "+".join(sorted(failure_categories)) or "timeout"
+        raise LLMError(f"All models failed: {type(last_error).__name__}", category=category) from last_error
 
 
 @dataclass

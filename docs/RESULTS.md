@@ -4,11 +4,45 @@ Live results for the current configuration, how answers are graded, and what the
 
 ## Current configuration
 
-Measured on commit `16c9b86`, with no uncommitted changes, the Gemini free tier and the cache off. Models are tried in the order `gemini-3.1-flash-lite`, `gemini-3.5-flash`, `gemini-3.6-flash`. The system prompt's SHA-256 prefix is `781d7b712874fccf`.
+Models are tried in the order `gemini-3.1-flash-lite`, `gemini-3.5-flash`, `gemini-3.6-flash`. The system prompt's SHA-256 prefix is `781d7b712874fccf`.
 
-### All 40 questions
+### Latest live validation
 
-The 10 in the brief plus 30 I wrote. Run with `python evaluate.py --extended --delay 6`, then `--resume` twice to re-run only questions the model could not answer. The run took place on 7 November 2026, 04:31 to 04:43 UTC. Full report: [reports/live_extended.md](../reports/live_extended.md).
+Run on 8 November 2026 against the current checkout (`6d5d7aa` plus the uncommitted fixes in this workspace), with cache disabled. Full per-question report: [reports/live_extended.md](../reports/live_extended.md).
+
+| Measure | Result |
+| --- | --- |
+| Strict accuracy among scored answers | **100%** (16 of 16) |
+| Model/infrastructure errors | 24 of 40 attempts unscored |
+| Lenient accuracy among scored answers | 100% |
+| Tool selection among scored answers | 100% |
+| End-to-end full-credit rate, counting outages as unsuccessful | **40%** (16 of 40) |
+| Gemini latency for scored model answers | p50 4.56 s, p95 11.41 s |
+
+This run does not prove 100% accuracy across all 40 questions: most were unavailable. In particular, X20 was an outage, so the hybrid fix has regression-test and offline-replay evidence, not a fresh live result. The report predates provider failure-category instrumentation and records these as model outages without distinguishing timeout from API errors.
+
+### Original assessment: three uncached live attempts
+
+Run on 8 November 2026 with `python evaluate.py --runs 3 --delay 6`; [full report](../reports/live.md). The evaluator calls `answer_question(..., use_cache=False)` for every attempt.
+
+| Question | Result across the three attempts |
+| --- | --- |
+| Q1 | Exact, 3/3 |
+| Q2 | Exact, 3/3 |
+| Q3 | Exact, 3/3 |
+| Q4 | Infrastructure outage, 3/3; no scored answer |
+| Q5 | Exact, 1/3; outage, 2/3 |
+| Q6 | Exact, 3/3 |
+| Q7 | Equivalent, 3/3; all expected data present |
+| Q8 | Exact, 3/3 |
+| Q9 | Exact, 3/3 |
+| Q10 | Exact, 3/3 |
+
+Aggregate: **25/25 scored attempts passed**, 5/30 attempts were infrastructure errors, and tool selection was 100% for scored cases. Eight questions were scored repeatedly with consistent outcomes; Q5 was scored once. A complete, single-run live 10/10 has not yet been observed because Q4 was unavailable on all three attempts. The latest live evaluator now records timeout and provider/API error categories for future runs.
+
+### Earlier 40-question run (7 November)
+
+The 10 in the brief plus 30 I wrote. The earlier three-attempt run below took place on 7 November 2026, 04:31 to 04:43 UTC; it is retained as historical context.
 
 | Measure | Brief's 10 questions | All 40 questions |
 | --- | --- | --- |
@@ -52,7 +86,7 @@ Every question that was scored more than once got the same verdict each time. Q5
 
 | Measure | Result |
 | --- | --- |
-| Unit and integration tests | 116 passed |
+| Unit and integration tests | 124 passed |
 | Self-test: 40 cases with reference plans replayed | 40 of 40 |
 | Sector exposure fast path, uncached, 300 runs | p50 2.7 ms, p95 4.3 ms |
 | Exact-repeat cache hit, 300 runs | p50 0.015 ms |

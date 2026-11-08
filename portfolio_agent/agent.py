@@ -23,6 +23,7 @@ from .llm import GeminiClient, LLMClient, LLMError, LLMResponse, ToolCall
 from .metadata import EntityLinker, Links, SchemaCatalog
 from .prompts import build_repair_prompt, build_system_prompt, build_user_prompt
 from .render import render_exposure, render_sql
+from .semantics import validate_result
 from .sql_guard import QueryResult, SQLBlocked, SQLExecutionError
 from .tools import AmbiguousPortfolio, Tools
 
@@ -40,6 +41,10 @@ _NOT_SIMPLE = re.compile(
     re.I,
 )
 _MAX_FANOUT = 20
+_DISCOVERY_TERMS = re.compile(
+    r"\b(?:highest|lowest|largest|smallest|biggest|top|max(?:imum)?|min(?:imum)?|all|each|every|passive|active)\b",
+    re.I,
+)
 
 STATUS_OK = "ok"
 STATUS_DECLINED = "declined"
@@ -216,9 +221,40 @@ class PortfolioAgent:
                 "The language model is unavailable right now. Please try again shortly.",
                 "model",
                 timings_ms={"llm": round((time.perf_counter() - started) * 1000, 3)},
+                llm={"failure_category": exc.category},
             )
         plan.latency_ms = (time.perf_counter() - started) * 1000  # Includes retries and fallback.
+        if self._requires_hybrid(question, links):
+            plan = self._complete_hybrid_plan(plan)
         return self._answer_with_calls(question, links, plan, route="model")
+
+    @staticmethod
+    def _requires_hybrid(question: str, links: Links) -> bool:
+        """An exposure request over a discovered set of portfolios needs SQL plus calculation."""
+        return (
+            bool(_EXPOSURE_INTENT.search(question))
+            and not links.portfolios
+            and not links.candidates
+            and bool(_DISCOVERY_TERMS.search(question))
+        )
+
+    @staticmethod
+    def _complete_hybrid_plan(plan: LLMResponse) -> LLMResponse:
+        """Require the exposure operation to consume the SQL-selected portfolio rows."""
+        if any(call.name == "decline" for call in plan.calls):
+            return plan
+        sql_positions = [i for i, call in enumerate(plan.calls) if call.name == "run_sql"]
+        if not sql_positions:
+            return plan
+        last_sql = sql_positions[-1]
+        calls = [call for call in plan.calls if call.name != "exposure_calculator"]
+        # Removing an earlier calculator may shift the SQL index.
+        last_sql = max(i for i, call in enumerate(calls) if call.name == "run_sql")
+        calls.insert(
+            last_sql + 1,
+            ToolCall("exposure_calculator", {"portfolio_names": [], "use_previous_sql_result": True}),
+        )
+        return LLMResponse(calls, plan.model, plan.latency_ms, plan.prompt_tokens, plan.output_tokens)
 
     def _answer_with_calls(self, question: str, links: Links, plan: LLMResponse, *, route: str) -> AgentResponse:
         reply = AgentResponse(question, STATUS_OK, "", route)
@@ -229,9 +265,18 @@ class PortfolioAgent:
         previous: QueryResult | None = None
         tool_started = time.perf_counter()
         try:
-            for call in plan.calls:
+            required_hybrid = self._requires_hybrid(question, links)
+            for index, call in enumerate(plan.calls):
                 if call.name == "run_sql":
-                    previous, section, repair = self._run_sql_step(question, links, call, reply)
+                    needs_followup = (
+                        required_hybrid
+                        and index + 1 < len(plan.calls)
+                        and plan.calls[index + 1].name == "exposure_calculator"
+                        and bool(plan.calls[index + 1].args.get("use_previous_sql_result"))
+                    )
+                    previous, section, repair = self._run_sql_step(
+                        question, links, call, reply, require_rows=needs_followup
+                    )
                     sections.append(section)
                     if repair is not None:
                         llm_ms += repair.latency_ms
@@ -239,7 +284,7 @@ class PortfolioAgent:
                         usage["prompt_tokens"] += repair.prompt_tokens
                         usage["output_tokens"] += repair.output_tokens
                 elif call.name == "exposure_calculator":
-                    sections.extend(self._run_exposure_step(call, previous, reply))
+                    sections.extend(self._run_exposure_step(call, previous, reply, question, links))
                 elif call.name == "decline":
                     kind = str(call.args.get("kind", ""))
                     status = STATUS_CLARIFY if kind == "ambiguous" else STATUS_DECLINED
@@ -250,6 +295,11 @@ class PortfolioAgent:
         except _StopPlan as stop:
             reply.status = stop.status
             sections = [stop.message]
+        if reply.status == STATUS_OK and self._requires_hybrid(question, links):
+            successful_tools = {step.tool for step in reply.steps if step.error is None}
+            if not {"run_sql", "exposure_calculator"}.issubset(successful_tools):
+                reply.status = STATUS_ERROR
+                sections = ["I could not complete both portfolio selection and sector exposure calculation."]
         reply.answer = "\n\n".join(s for s in sections if s)
         reply.llm = usage
         tool_ms = (time.perf_counter() - tool_started) * 1000 - (llm_ms - plan.latency_ms)
@@ -257,7 +307,7 @@ class PortfolioAgent:
         return reply
 
     def _run_sql_step(
-        self, question: str, links: Links, call: ToolCall, reply: AgentResponse
+        self, question: str, links: Links, call: ToolCall, reply: AgentResponse, *, require_rows: bool = False
     ) -> tuple[QueryResult, str, LLMResponse | None]:
         sql = str(call.args.get("sql", ""))
         title = str(call.args.get("title", ""))
@@ -267,6 +317,9 @@ class PortfolioAgent:
         try:
             try:
                 result = self.tools.run_sql(sql)
+                issue = self._sql_result_issue(question, result, require_rows)
+                if issue:
+                    raise SQLExecutionError(issue)
             except SQLExecutionError as exc:  # Invalid but harmless: one repair attempt.
                 if self.llm is None:  # No model to repair with, e.g. a stored plan without a key.
                     raise
@@ -279,6 +332,9 @@ class PortfolioAgent:
                 sql = next(str(c.args.get("sql", "")) for c in repair.calls if c.name == "run_sql")
                 step.input["sql"] = sql
                 result = self.tools.run_sql(sql)
+                issue = self._sql_result_issue(question, result, require_rows)
+                if issue:
+                    raise SQLExecutionError(issue) from exc
         except SQLBlocked as exc:
             step.error = str(exc)
             raise _StopPlan(STATUS_BLOCKED, f"That query was blocked: {exc}") from exc
@@ -293,11 +349,24 @@ class PortfolioAgent:
         )
         return result, render_sql(result, title, question), repair
 
-    def _run_exposure_step(self, call: ToolCall, previous: QueryResult | None, reply: AgentResponse) -> list[str]:
+    def _sql_result_issue(self, question: str, result: QueryResult, require_rows: bool) -> str | None:
+        if require_rows and not result.rows:
+            return (
+                "This query returned no portfolio rows, but the request requires a follow-up exposure calculation. "
+                "For latest performance or risk values, use each portfolio's latest available date rather than "
+                "filtering every portfolio to one global maximum date."
+            )
+        return validate_result(question, result, self.settings.db_path)
+
+    def _run_exposure_step(
+        self, call: ToolCall, previous: QueryResult | None, reply: AgentResponse, question: str, links: Links
+    ) -> list[str]:
         names = [str(n) for n in (call.args.get("portfolio_names") or [])]
         if call.args.get("use_previous_sql_result"):
             names = _portfolio_names_from(previous)
             if not names:
+                if self._requires_hybrid(question, links):
+                    raise _StopPlan(STATUS_ERROR, "The portfolio selection returned no names for exposure calculation.")
                 raise _StopPlan(STATUS_OK, "No portfolios matched, so there are no exposures to calculate.")
         if not names:
             raise _StopPlan(STATUS_CLARIFY, "Which portfolio would you like the sector exposure for?")

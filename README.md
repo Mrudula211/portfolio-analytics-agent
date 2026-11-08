@@ -15,12 +15,12 @@ Note: Recorded weights and market values disagree by up to 11.2 points; the reco
 
 ## At a glance
 
-- **Brief's 10 questions:** 8 correct and 2 partly correct (Q5 and Q8), with the same verdicts in every run where they were scored.
-- **All 40 questions** (the brief's 10 plus 30 I wrote): 92.3% strict accuracy. Safety and refusal cases: 10 of 10.
+- **Original 10, three uncached live attempts:** 25 of 25 scored answers passed; 5 attempts were model outages. Q4 was unavailable all three times; Q5 passed once and was unavailable twice.
+- **Latest 40-question live run:** 16 of 16 scored answers passed; 24 attempts were model outages. See [the per-question report](reports/live_extended.md).
 - **Speed:**
   - under 1 ms for repeat questions
   - about 10 ms for sector exposure, which skips the model
-  - a median of 2.1 s when Gemini is needed, on the free tier
+  - a median of 4.56 s when Gemini is needed, on the free tier
 - **Every failure, cost and caveat** is in [docs/RESULTS.md](docs/RESULTS.md).
 
 ## Requirements checklist
@@ -32,7 +32,7 @@ Note: Recorded weights and market values disagree by up to 11.2 points; the reco
 | Command-line agent that chooses a tool | [agent.py](portfolio_agent/agent.py) | `--trace` shows the tool chosen |
 | Evaluator against the ground truth | [evaluate.py](evaluate.py), [evaluation.py](portfolio_agent/evaluation.py) | `python evaluate.py`, or `--self-test` without an API key |
 | Brief documentation and a diagram | This page and [docs/](docs/) | Diagram below |
-| Clean code with error handling | 116 tests, the `ruff` linter, CI on every push | `pytest` |
+| Clean code with error handling | 124 tests, the `ruff` linter, CI on every push | `pytest` |
 
 **Optional enhancements:**
 - **SQL safety:** parameterised queries, validation before execution and graceful database errors.
