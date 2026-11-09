@@ -61,7 +61,8 @@ def create_app(agent: PortfolioAgent | None = None) -> FastAPI:
 
     @app.get("/api/health")
     def health(request: Request) -> dict:
-        return {"status": "ok", "model_configured": request.app.state.agent.llm is not None}
+        agent = request.app.state.agent
+        return {"status": "ok", "model_configured": agent.llm is not None, "gemini": agent.gemini_status}
 
     return app
 

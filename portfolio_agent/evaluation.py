@@ -335,6 +335,12 @@ class Evaluator:
                     f"exposures {sorted(exposure_names)} do not match SQL selection {sorted(selected_names)}",
                     False,
                 )
+            for step in exposure_steps:  # What was passed in must be what the result describes.
+                asked = str(step.input.get("portfolio_name", ""))
+                resolved, _ = self.agent.linker.resolve(asked)
+                if resolved != step.exposure["portfolio_name"]:
+                    detail = f"calculator input {asked!r} resolved to {resolved!r}"
+                    return FAIL, f"{detail}, but the result belongs to {step.exposure['portfolio_name']!r}", False
             verdict, detail = _check_exposures(case, reply, self.oracle)
             return verdict, detail, used == {"run_sql", "exposure_calculator"}
         steps = _sql_steps(reply)

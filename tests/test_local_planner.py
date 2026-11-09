@@ -68,8 +68,9 @@ def share_oracle(sector):
 
 
 def top_oracle(portfolio, metric, direction, n):
+    extra = "" if metric == "h.quantity" else f", {metric}"
     return (
-        f"SELECT h.holding_id, s.symbol, s.company_name, h.quantity, {metric} "
+        f"SELECT h.holding_id, s.symbol, s.company_name, h.quantity{extra} "
         "FROM holdings h, securities s WHERE s.security_id = h.security_id "
         f"AND h.portfolio_id = (SELECT portfolio_id FROM portfolios WHERE portfolio_name = '{portfolio}') "
         f"ORDER BY {metric.split(' AS ')[-1] if ' AS ' in metric else metric} {direction} LIMIT {n}"

@@ -328,6 +328,8 @@ class PortfolioAgent:
         previous: QueryResult | None = None
         tool_started = time.perf_counter()
         try:
+            if not plan.calls:
+                raise _StopPlan(STATUS_ERROR, "The plan contained no steps.")
             required_hybrid = self._requires_hybrid(question, links)
             for index, call in enumerate(plan.calls):
                 if call.name == "run_sql":

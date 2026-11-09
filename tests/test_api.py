@@ -50,7 +50,9 @@ def test_rate_limit_is_per_client():
 
 
 def test_health(client):
-    assert client.get("/api/health").json() == {"status": "ok", "model_configured": True}
+    body = client.get("/api/health").json()
+    assert body["status"] == "ok" and body["model_configured"] is True
+    assert body["gemini"]["state"] == "configured"  # A client exists; no request has proved it works.
 
 
 def test_concurrent_requests_succeed(client):

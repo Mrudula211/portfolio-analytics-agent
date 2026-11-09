@@ -35,8 +35,10 @@ ASSESSMENT_DIVERSIFICATION = MetricDefinition(
 )
 
 DEFAULT_SECTOR_THRESHOLD = 5  # The assessment's definition: more than five sectors.
-_NUMBER_WORDS = {w: i for i, w in enumerate('zero one two three four five six seven eight nine ten'.split())}
-_SECTOR_THRESHOLD = re.compile(r"\bmore than (\d+|one|two|three|four|five|six|seven|eight|nine|ten) (?:different |distinct )?sectors\b", re.I)
+_NUMBER_WORDS = {w: i for i, w in enumerate("zero one two three four five six seven eight nine ten".split())}
+_SECTOR_THRESHOLD = re.compile(
+    r"\bmore than (\d+|one|two|three|four|five|six|seven|eight|nine|ten) (?:different |distinct )?sectors\b", re.I
+)
 
 
 def sector_threshold(question: str) -> int:

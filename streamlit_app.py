@@ -35,7 +35,17 @@ ROUTES = {
     "gemini": "Gemini plan + SQL",
     "local_deterministic": "Local planner, no model call",
     "local_fallback": "Local planner (Gemini unavailable)",
+    "clarification": "Needs more detail",
     "validation": "Not run",
+    "error": "Not answered",
+}
+# What the sidebar says about Gemini. A client existing proves nothing; only a real request does.
+GEMINI_STATES = {
+    "not_configured": ":red[●] Gemini not configured. The local planner answers what it supports.",
+    "configured": ":orange[●] Gemini configured, not used yet",
+    "ok": ":green[●] Gemini responding (the last request succeeded)",
+    "unavailable": ":orange[●] Gemini temporarily unavailable. Using the local planner.",
+    "quota_exhausted": ":orange[●] Gemini quota exhausted. Using the local planner.",
 }
 BAR_COLOUR = "#2a2ad0"  # Royal blue that passes contrast checks on white.
 
@@ -131,11 +141,22 @@ def show_sql_step(step: dict, question: str) -> None:
         st.code(step["input"]["sql"], language="sql")
 
 
+def route_label(reply: dict) -> str:
+    """Where the answer came from, stated precisely."""
+    llm = reply.get("llm") or {}
+    if reply["route"] == "cache" and llm.get("prepared_example"):
+        return "Prepared example: a stored Gemini plan, run against the database"
+    label = ROUTES.get(reply["route"], reply["route"])
+    if reply["route"] == "local_fallback" and llm.get("fallback_reason"):
+        label += f" - {llm['fallback_reason'].replace('_', ' ')}"
+    return label
+
+
 def show_reply(reply: dict) -> None:
     total = reply["timings_ms"].get("total")
     timing = "" if total is None else (f"{total:.1f} ms" if total < 1000 else f"{total / 1000:.2f} s")
     st.markdown(f"#### {escape(reply['question'])}")
-    st.caption(" · ".join(part for part in (ROUTES.get(reply["route"], reply["route"]), timing) if part))
+    st.caption(" · ".join(part for part in (route_label(reply), timing) if part))
     if reply["status"] in {"declined", "clarify"}:
         st.info(reply["answer"])
         return
@@ -156,7 +177,8 @@ def show_evaluation(report: dict | None) -> None:
         st.info("No evaluation report is bundled with this deployment.")
         return
     summary, meta = report["summary"], report["meta"]
-    model = summary["by_route"].get("model", {})
+    routes = summary["by_route"]  # Reports written before the route rename call it "model".
+    model = routes.get("gemini") or routes.get("model", {})
     figures = [
         ("Strict accuracy", f"{summary['strict_accuracy']:.1%}", f"{summary['cases_scored']} questions scored"),
         ("Lenient accuracy", f"{summary['lenient_accuracy']:.1%}", "counting partial answers"),
@@ -201,8 +223,7 @@ agent, examples, limiter = load_agent()
 facts, notes = load_facts(str(agent.settings.db_path))
 
 with st.sidebar:
-    status = ":green[●] Gemini configured" if agent.llm else ":red[●] Gemini not configured"
-    st.markdown(status)
+    st.markdown(GEMINI_STATES[agent.gemini_status["state"]])
     st.markdown("**Examples**")
     for index, example in enumerate(examples):
         st.button(example, key=f"example_{index}", on_click=queue, args=(example,), type="tertiary")
@@ -219,7 +240,10 @@ query_tab, evaluation_tab = st.tabs(["Query", "Evaluation"])
 
 with query_tab:
     if not agent.llm:
-        st.warning("No Gemini API key is configured, so only the examples and sector exposure questions work.")
+        st.warning(
+            "No Gemini API key is configured. The examples, sector exposures and the questions the local planner "
+            "supports still work."
+        )
     with st.form("ask", border=False):
         left, right = st.columns([8, 1], vertical_alignment="bottom")
         typed = left.text_input(

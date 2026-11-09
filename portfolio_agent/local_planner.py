@@ -20,7 +20,7 @@ from pathlib import Path
 
 from .db import connect_readonly
 from .llm import LLMResponse, ToolCall
-from .metadata import Links
+from .metadata import _SECTOR_ALIASES, Links
 from .semantics import metric_for_question, sector_threshold
 
 EXPOSURE_INTENT = re.compile(
@@ -48,8 +48,19 @@ _FILLER = set(
     "what whats is s are the of a an in do does we have has our us how many there total number count all every each "
     "names name list show me which for with and to by please give display on books manage managed under at level "
     "target risk aum assets management average avg mean sum combined overall largest biggest highest greatest "
-    "smallest lowest most least portfolio portfolios fund funds across".split()
+    "smallest lowest most least portfolio portfolios fund funds across per".split()
 )
+# Extra words each intent legitimately uses, on top of the filler above and the database's own names.
+_INTENT_WORDS = {
+    "exposure": "sector sectors exposure exposures breakdown allocation allocations weights weighting mix split "
+    "calculate",
+    "diversification": "diversification metric metrics ratio ratios find holding holdings that their different "
+    "distinct sector sectors than more",
+    "share": "value worth percentage percent share holdings holding sector sectors that it represents",
+    "top": "holdings holding positions position top bottom cost basis market value quantity shares weight current",
+    "price": "price prices current share securities security stocks stock sector sectors",
+    "securities": "securities security stocks stock companies company symbols tickers belong belongs sector sectors",
+}
 _PORTFOLIO_WORD = re.compile(r"\b(?:portfolios?|funds?)\b")
 _ALL_WORD = re.compile(r"\b(?:all|every|each)\b")
 _SUPERLATIVE = re.compile(r"\b(?:largest|biggest|highest|greatest|most|smallest|lowest|least)\b")
@@ -77,8 +88,14 @@ class Vocabulary:
                 )
             ]
             self.sector_group = {r[0]: r[1] for r in conn.execute("SELECT sector_name, industry_group FROM sectors")}
+            names = [r[0] for r in conn.execute("SELECT portfolio_name FROM portfolios")]
+            names += list(self.sector_group) + [g for g in self.sector_group.values() if g]
+            names += [v for r in conn.execute("SELECT symbol, company_name FROM securities") for v in r]
         finally:
             conn.close()
+        # Every word of every portfolio, sector and security name, plus the sector nicknames the linker knows.
+        self.entity_words = {w for name in names for w in re.findall(r"[a-z0-9]+", name.lower())}
+        self.entity_words |= {w for alias in _SECTOR_ALIASES for w in alias.split()}
 
 
 class LocalPlanner:
@@ -132,10 +149,21 @@ class LocalPlanner:
             fixed.append(word)
         return " ".join(fixed)
 
-    def _unexplained(self, text: str) -> bool:
-        """True when the question holds words the simple intents cannot account for."""
-        known = _FILLER | {w for v in self.vocabulary.status + self.vocabulary.risk for w in v.lower().split()}
-        return any(word not in known for word in text.split())
+    def _unexplained(self, text: str, intent: str = "", numbers: bool = False) -> bool:
+        """True when the question holds a word this intent cannot account for.
+
+        An unknown word usually means an extra condition ("created in 2023", "in Europe"). Dropping it
+        would answer a different question, so the planner declines and lets the caller say so.
+        """
+        known = _FILLER | self.vocabulary.entity_words | set(_INTENT_WORDS.get(intent, "").split())
+        known |= {w for v in self.vocabulary.status + self.vocabulary.risk for w in v.lower().split()}
+        for word in text.split():
+            if word in known or (numbers and (word.isdigit() or word in _NUMBER_WORDS)):
+                continue
+            if len(word) >= 5 and get_close_matches(word, self.vocabulary.entity_words, n=1, cutoff=0.8):
+                continue  # A misspelt name; the entity linker has already resolved it.
+            return True
+        return False
 
     def _filters(self, text: str) -> list[str]:
         conditions = []
@@ -180,6 +208,8 @@ class LocalPlanner:
             return None
         if links.sectors or links.securities:
             return None  # A specific sector's exposure is a different question.
+        if self._unexplained(text, "exposure"):
+            return None
         if links.portfolios:
             return [
                 ToolCall("exposure_calculator", {"portfolio_names": links.portfolios, "use_previous_sql_result": False})
@@ -204,13 +234,9 @@ class LocalPlanner:
     def _diversification(self, question: str, text: str, links: Links) -> list[ToolCall] | None:
         if metric_for_question(question) is None or links.portfolios:
             return None
-        match = re.search(
-            r"\bmore than (\d+|" + "|".join(_NUMBER_WORDS) + r") (?:different |distinct )?sectors\b", text
-        )
-        threshold = 5
-        if match:
-            token = match.group(1)
-            threshold = int(token) if token.isdigit() else _NUMBER_WORDS[token]
+        if self._unexplained(text, "diversification", numbers=True):
+            return None
+        threshold = sector_threshold(question)
         sql = (
             "WITH portfolio_sector_count AS (SELECT p.portfolio_id, p.portfolio_name, "
             "COUNT(DISTINCT sec.sector_id) AS sector_count FROM portfolios p "
@@ -230,6 +256,8 @@ class LocalPlanner:
         if len(links.sectors) != 1 or links.portfolios or links.securities:
             return None
         if not (re.search(r"\b(?:percentage|percent|share|%)\b", text) and re.search(r"\b(?:value|worth)\b", text)):
+            return None
+        if self._unexplained(text, "share"):
             return None
         sector = links.sectors[0]
         group = self.vocabulary.sector_group.get(sector) or sector
@@ -255,7 +283,7 @@ class LocalPlanner:
             r"\b(?:top|largest|biggest|smallest|bottom|highest|lowest)\b", text
         ):
             return None
-        if len(links.portfolios) != 1 or links.sectors:
+        if len(links.portfolios) != 1 or links.sectors or self._unexplained(text, "top", numbers=True):
             return None
         if re.search(r"\bcost basis\b", text):
             metric, order = "h.cost_basis", "h.cost_basis"
@@ -280,7 +308,7 @@ class LocalPlanner:
     def _average_price_by_sector(self, question: str, text: str, links: Links) -> list[ToolCall] | None:
         if not re.search(r"\b(?:average|avg|mean)\b", text) or not re.search(r"\bprices?\b", text):
             return None
-        if links.sectors or links.portfolios or links.securities:
+        if links.sectors or links.portfolios or links.securities or self._unexplained(text, "price"):
             return None
         if not re.search(r"\b(?:each|every|per|by)\s+sector\b|\bsector by sector\b|\bacross sectors\b", text):
             return None
@@ -296,6 +324,8 @@ class LocalPlanner:
         if not re.search(r"\b(?:securities|stocks|companies|names|symbols|tickers)\b", text):
             return None
         if re.search(r"\b(?:price|value|average|total|count|how many|percentage|exposure|holdings?)\b", text):
+            return None
+        if self._unexplained(text, "securities"):
             return None
         sql = (
             "SELECT s.symbol, s.company_name FROM securities s JOIN sectors sec ON s.sector_id = sec.sector_id "
