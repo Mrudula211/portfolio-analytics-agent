@@ -78,30 +78,35 @@ For portfolio rankings, “strongest” and “best-performing” mean the highe
 ## How it works
 
 ```mermaid
-flowchart LR
-    Q[Question] --> C{Valid cache hit?}
+flowchart TD
+    Q[Question] --> C{Exact cache hit?}
     C -- yes --> A[Cached answer]
-    C -- no --> L[Match names and detect supported intent]
-    L --> F{Supported local intent?}
-    F -- yes --> P[Local deterministic plan]
-    P --> S[SQL guard, then run query]
-    P --> E[Exposure calculator]
-    F -- no --> M[Gemini returns a tool plan]
-    M -- unavailable or invalid --> P
-    M --> S[SQL guard, then run query]
-    M --> E
-    M --> D[Decline or ask to clarify]
+    C -- no --> P[Policy and ambiguity checks]
+    P -- continue --> L[Link entities]
+    P -- blocked or unclear --> D[Clarify or decline]
+    L --> X{Simple exposure for one named portfolio?}
+    X -- yes --> E[Exposure calculator]
+    X -- no --> K{Gemini configured?}
+    K -- yes --> G[Gemini tool plan]
+    G -- usable --> T[Execute tool plan]
+    G -- unavailable, quota-limited or unusable --> F[Local deterministic planner]
+    K -- no --> F
+    F -- supported --> T
+    F -- unsupported --> D
+    T --> S[Read-only SQL tool]
+    T --> E
     S -- invalid SQL --> R[One repair call]
     R --> S
-    S --> T[Answer formatted by code]
-    E --> T
+    S --> H[Answer formatted by code]
+    E --> H
     D --> A
-    T --> A
+    H --> A
 ```
 
+- After cache, policy and entity checks, a simple exposure request for one named portfolio uses the calculator directly. For other questions, Gemini is called first when configured; the deterministic planner is used when Gemini is unconfigured, unavailable, quota-limited or returns an unusable plan. Its coverage is bounded, so unsupported requests are clarified or declined.
 - **One logical planning call per question** returns the whole plan, including both steps of a hybrid question. A repair can add another planning call; hedged model fallbacks can submit up to three provider requests per planning call.
 - **Code writes the answer,** so the model cannot misquote or invent a figure.
-- **Supported requests run without Gemini** through the local deterministic planner; single-fund sector exposure uses the calculator directly. Gemini remains available for intents outside the local planner. See [the fallback assessment](reports/local_fallback_assessment.md).
+- **Supported requests can run without Gemini** through the local deterministic planner; single-fund sector exposure uses the calculator directly. See [the fallback assessment](reports/local_fallback_assessment.md).
 - **Hedged requests:** if a model is slow or fails, the next one starts after 2.5 s, and the first answer wins.
 
 How this design was reached through ten Gemini experiments is in [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md).

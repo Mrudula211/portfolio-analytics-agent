@@ -86,12 +86,14 @@ Every question that was scored more than once got the same verdict each time. Q5
 
 | Measure | Result |
 | --- | --- |
-| Unit and integration tests | 124 passed |
+| Unit and integration tests | 124 passed (earlier historical baseline) |
 | Self-test: 40 cases with reference plans replayed | 40 of 40 |
 | Sector exposure fast path, uncached, 300 runs | p50 2.7 ms, p95 4.3 ms |
 | Exact-repeat cache hit, 300 runs | p50 0.015 ms |
 
 The self-test proves the tools, the SQL guard and the scorer work together. It says nothing about the model's accuracy. Timings were taken in process on a Windows laptop and exclude network time.
+
+The 124-test count is an earlier historical result, not the latest suite count. The latest documented test suite passed 281 tests; see the 9 November validation below.
 
 ### Earlier configuration
 
