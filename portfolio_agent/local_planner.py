@@ -59,7 +59,9 @@ _INTENT_WORDS = {
     "share": "value worth percentage percent share holdings holding sector sectors that it represents",
     "top": "holdings holding positions position top bottom cost basis market value quantity shares weight current",
     "price": "price prices current share securities security stocks stock sector sectors",
-    "securities": "securities security stocks stock companies company symbols tickers belong belongs sector sectors track we name",
+    "securities": (
+        "securities security stocks stock companies company symbols tickers belong belongs sector sectors track we name"
+    ),
 }
 _PORTFOLIO_WORD = re.compile(r"\b(?:portfolios?|funds?)\b")
 _ALL_WORD = re.compile(r"\b(?:all|every|each)\b")
