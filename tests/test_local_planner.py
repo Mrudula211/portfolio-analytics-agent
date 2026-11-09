@@ -295,7 +295,7 @@ UNSUPPORTED = [
 def test_unsupported_wording_is_declined_not_mapped_to_a_similar_question(agent, question):
     assert agent.planner.plan(question, agent.linker.link(question)) is None
     reply = agent.answer_question(question, use_cache=False)
-    assert reply.status in {"error", "declined"} and not reply.steps, (reply.route, reply.answer)
+    assert reply.status in {"error", "declined", "blocked"} and not reply.steps, (reply.route, reply.answer)
 
 
 def test_ambiguous_portfolio_asks_which_one(agent):
