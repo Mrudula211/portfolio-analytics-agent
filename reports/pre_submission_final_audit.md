@@ -14,10 +14,10 @@
 ## Submission caveats
 
 - No live Gemini evaluation was performed in this run; prior live reports contain scored samples and provider outages, not a complete live 10/10 or 40/40.
-- GitHub Actions status could not be queried because GitHub CLI is unavailable. CI now includes `evaluate.py --local-fallback --min-accuracy 1.0`; that workflow change has not yet run remotely.
-- Local changes have not yet been committed or pushed. They consist of the UI prepared-cache label fix, CI fallback step, and current audit/report/documentation updates. Do not claim publication until verified.
+- GitHub Actions CI #12 for commit `2ba8b90` completed successfully (test and image jobs). The run is at https://github.com/Mrudula211/portfolio-analytics-agent/actions/runs/42551749161.
+- The verified implementation and reports are published to `main` at commit `2ba8b9049e931bb8ee6b6f25a73e9c8bc669d65d`.
 - The local planner covers a bounded intent set; unsupported intents require Gemini or return a clear error/clarification.
 
 ## Verdict
 
-**READY WITH DOCUMENTED LIMITATIONS** for the official task’s Gemini-independent acceptance. The verified 10/10 production fallback meets the key deterministic acceptance target. Before claiming a fully published submission, commit and push the reviewed local changes and verify the resulting GitHub Actions run. Live Gemini behavior remains separately unverified by this run.
+**READY WITH DOCUMENTED LIMITATIONS** for the official task’s Gemini-independent acceptance. The verified 10/10 production fallback meets the key deterministic acceptance target. The reviewed changes are published and the GitHub Actions run passed. Live Gemini behavior remains separately unverified by this run. Live Gemini behavior remains separately unverified by this run.

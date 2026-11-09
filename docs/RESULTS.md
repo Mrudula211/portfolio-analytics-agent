@@ -145,4 +145,4 @@ The current checked-out implementation passed `python evaluate.py --local-fallba
 
 `python evaluate.py --self-test --extended --min-accuracy 1.0` also passed 40/40 exact. This is **reference-plan replay**, not a production-planner or Gemini evaluation. The production planner has 70 positive/negative paraphrase examples in its test suite. The current test suite has 279 passing tests, including 35 dataset integrity tests; Ruff lint and formatting pass.
 
-No live Gemini run was made for this validation. The deployed Streamlit health endpoint returned HTTP 200 (`ok`) on 9 November 2026. GitHub Actions status was not checked because `gh` is not installed in this environment.
+No live Gemini run was made for this validation. The deployed Streamlit health endpoint returned HTTP 200 (`ok`) on 9 November 2026. GitHub Actions run #12 passed both test and image jobs for commit `2ba8b90` ([workflow run](https://github.com/Mrudula211/portfolio-analytics-agent/actions/runs/42551749161)).
