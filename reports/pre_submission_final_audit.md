@@ -1,29 +1,33 @@
-﻿# Pre-submission final audit — 9 November 2026
+# Pre-submission final audit ? 9 November 2026
 
-## Verified
+## Repository reconciliation
 
-- Branch reconciliation: at task start, local `main` and `origin/main` matched at `34c873a`; no local or remote-only commits and no uncommitted work.
-- Public access change: password checks removed from Streamlit and the standalone API; the Render blueprint no longer declares a shared password. AppTest verifies the page opens without a login even when the legacy environment variable is set.
+At task start, the local `main` and `origin/main` both pointed to `34c873a040244f977b214e00823e43ba4f23dc40`; the working tree was clean and there were no divergent commits. The subsequent changes have been committed and pushed to `main`; current HEAD is recorded by `git rev-parse HEAD`.
 
-- Current branch is `main`; HEAD and `origin/main` both resolved to `2ab7c47d30ddc1b120e16cab2eb846b63b4d056f` before these local edits.
-- Actual production fallback: 10/10 official ground-truth exact; no Gemini client and zero network attempts; cache and stored plans disabled.
-- Reference-plan extended self-test: 40/40 exact; explicitly separate from planner accuracy.
-- Full tests: 279 passed. Dataset checks: 35 passed. Ruff lint and format pass.
-- Planner tests: 70 distinct SQL/exposure/hybrid/negative question examples plus ambiguity and unknown-entity checks.
-- Official ground-truth and source dataset files unchanged.
-- Render configuration deploys Docker Streamlit; deployed `/_stcore/health` returned HTTP 200 `ok`.
-- Hybrid evaluator regression and actual production agent are covered by tests.
+## Verified implementation
 
-## Submission caveats
+- Streamlit and the standalone API no longer have a shared-password gate. `DEMO_PASSWORD` is not read by runtime configuration and is absent from `render.yaml`; regression tests confirm a legacy variable cannot restore login.
+- `GEMINI_API_KEY` and `DAILY_MODEL_QUESTIONS` remain configured in Render. Rate limits, input limits, read-only SQL and daily Gemini caps remain in place.
+- Official production fallback: 10/10 exact, 0 equivalent/partial/fail/infra, 0 network attempts, no Gemini client, cache off, demo plans not loaded.
+- Extended production fallback: 29/40 exact, 11 unsupported intents, 0 infrastructure errors, 0 network attempts. The unsupported cases are documented in `reports/local_fallback_extended.md`.
+- Extended reference-plan replay: 40/40 exact. This is a separate tool/evaluator check, not planner accuracy.
+- Full suite: 281 passed. Dataset integrity: 35 tests passed and `python -m portfolio_agent --check-data` reports the known sample-data limitations. Ruff lint and format pass.
+- The production planner has 70 paraphrase/generalization cases (45 SQL, 7 exposure, 4 hybrid, 14 negative), plus ambiguity, unknown-entity and policy tests.
+- Render config is Docker Streamlit. The public health endpoint returned HTTP 200 `ok`; the root page returned HTTP 200. Exact deployed commit and live rendered no-login state are not exposed by those checks and remain unverified.
+- No live Gemini request was made.
 
-- After the public-access changes, local tests and deterministic evaluations pass. Render still needs to deploy the new source; the exact deployed commit and live no-login page state are not yet verified.
-- The extended production local-fallback run scored 29/40 exact; 11 extended intents (NAV, risk/performance history, transactions/bond queries, NVDA holdings, and latest-beta hybrid) remain outside deterministic coverage and fail as unsupported when Gemini is absent. This does not affect official Q1?Q10.
+## CI and publication
 
-- No live Gemini evaluation was performed in this run; prior live reports contain scored samples and provider outages, not a complete live 10/10 or 40/40.
-- GitHub Actions CI #12 for commit `2ba8b90` completed successfully (test and image jobs). The run is at https://github.com/Mrudula211/portfolio-analytics-agent/actions/runs/42551749161.
-- The verified implementation and reports are published to `main` at commit `2ba8b9049e931bb8ee6b6f25a73e9c8bc669d65d`.
-- The local planner covers a bounded intent set; unsupported intents require Gemini or return a clear error/clarification.
+- Latest verified source commit at this audit: `07e8d665` on `main`.
+- GitHub Actions CI succeeded for that commit: https://github.com/Mrudula211/portfolio-analytics-agent/actions/runs/42555171699
+- The workflow includes Ruff, full tests, dataset check, production fallback 10/10, extended reference replay, Docker build and Streamlit health smoke checks.
+- The source removes the assessment password gate, but Render must complete/reveal a deployment of the new commit before public authentication behavior or deployed source parity can be confirmed.
+
+## Remaining limitations
+
+- The deterministic planner is intentionally bounded. Eleven extended cases covering passive status/AUM phrasing, NAV/risk/performance history, transactions, bond queries, NVDA holdings, and beta-to-exposure hybrid remain unsupported without Gemini.
+- Live Gemini accuracy and the exact commit currently served by Render are unverified.
 
 ## Verdict
 
-**READY WITH DOCUMENTED LIMITATIONS** for the official task’s Gemini-independent acceptance. The verified 10/10 production fallback meets the key deterministic acceptance target. The currently reviewed changes are local and await publication. Live Gemini behavior remains separately unverified by this run.
+**READY WITH DOCUMENTED LIMITATIONS** for the official Gemini-independent acceptance: Q1?Q10 pass exactly in production offline mode. Treat public deployment parity and live Gemini behavior as pending verification.
