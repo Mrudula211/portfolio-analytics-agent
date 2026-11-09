@@ -146,3 +146,8 @@ The current checked-out implementation passed `python evaluate.py --local-fallba
 `python evaluate.py --self-test --extended --min-accuracy 1.0` also passed 40/40 exact. This is **reference-plan replay**, not a production-planner or Gemini evaluation. The production planner has 70 positive/negative paraphrase examples in its test suite. The current test suite has 279 passing tests, including 35 dataset integrity tests; Ruff lint and formatting pass.
 
 No live Gemini run was made for this validation. The deployed Streamlit health endpoint returned HTTP 200 (`ok`) on 9 November 2026. GitHub Actions run #12 passed both test and image jobs for commit `2ba8b90` ([workflow run](https://github.com/Mrudula211/portfolio-analytics-agent/actions/runs/42551749161)).
+
+
+### Extended production fallback coverage
+
+The real production agent was also run on all 40 official plus extended cases without Gemini: **29 exact, 11 unsupported/fail, 0 infrastructure errors, 0 network attempts**. The unsupported cases are x02, x03, x05?x12 and x20, which ask for unsupported filters, time-series/risk/transaction/bond/NVDA queries or a beta-to-exposure hybrid. Safety and out-of-scope refusals x21?x29 and the ambiguous x30 were handled correctly. See [the per-case report](../reports/local_fallback_extended.md). The 40/40 reference-plan self-test does not measure planner coverage.

@@ -15,7 +15,7 @@ Note: Recorded weights and market values disagree by up to 11.2 points; the reco
 
 ## At a glance
 
-Public app: https://portfolio-analytics-agent.onrender.com/
+Public app: https://portfolio-analytics-agent.onrender.com/ (no application login gate).
 
 - **Offline production fallback:** 10/10 exact on 9 November 2026 with no Gemini client, cache, demo plans, or network attempts. See [the local fallback report](reports/local_fallback.md). This is separate from live Gemini accuracy.
 - **Latest 40-question live run:** 16/16 scored answers passed, with 24/40 infrastructure failures (40% end-to-end full credit counting outages as unsuccessful). This is not a complete live 40/40. See [the per-question report](reports/live_extended.md).
@@ -34,7 +34,7 @@ Public app: https://portfolio-analytics-agent.onrender.com/
 | Command-line agent that chooses a tool | [agent.py](portfolio_agent/agent.py) | `--trace` shows the tool chosen |
 | Evaluator against the ground truth | [evaluate.py](evaluate.py), [evaluation.py](portfolio_agent/evaluation.py) | `python evaluate.py`, or `--self-test` without an API key |
 | Brief documentation and a diagram | This page and [docs/](docs/) | Diagram below |
-| Clean code with error handling | 279 tests, Ruff lint and formatting, CI on every push | `pytest` |
+| Clean code with error handling | 281 tests, Ruff lint and formatting, CI on every push | `pytest` |
 
 **Optional enhancements:**
 - **SQL safety:** parameterised queries, validation before execution and graceful database errors.

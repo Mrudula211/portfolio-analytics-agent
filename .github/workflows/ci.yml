@@ -18,6 +18,7 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: ruff check . && ruff format --check .
       - run: pytest -q
+      - run: python -m portfolio_agent --check-data
       # Exercise the actual production planner with Gemini, cache and demo plans disabled.
       - run: python evaluate.py --local-fallback --min-accuracy 1.0
       # Replays reference plans, so it checks the tool/guard/scorer pipeline, not planner accuracy.
