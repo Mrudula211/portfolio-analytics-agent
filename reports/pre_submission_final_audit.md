@@ -18,8 +18,8 @@ At task start, the local `main` and `origin/main` both pointed to `34c873a040244
 
 ## CI and publication
 
-- Latest verified source commit at this audit: `07e8d665` on `main`.
-- GitHub Actions CI succeeded for that commit: https://github.com/Mrudula211/portfolio-analytics-agent/actions/runs/42555171699
+- Latest verified source commit at this audit: `a255ecda` on `main`.
+- GitHub Actions CI succeeded for that commit: https://github.com/Mrudula211/portfolio-analytics-agent/actions/runs/42555331261
 - The workflow includes Ruff, full tests, dataset check, production fallback 10/10, extended reference replay, Docker build and Streamlit health smoke checks.
 - The source removes the assessment password gate, but Render must complete/reveal a deployment of the new commit before public authentication behavior or deployed source parity can be confirmed.
 
