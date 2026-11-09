@@ -4,7 +4,7 @@
 
 `PortfolioAgent` routes supported, bounded intents through `portfolio_agent/local_planner.py`; the planner produces ordinary tool calls. SQL passes through the same SQL guard and read-only executor as model plans. Exposure requests use the production `exposure_calculator`. Supported intents include portfolio counts and lists, AUM aggregations/rankings, sector security lists and average prices, top/bottom holdings, sector value shares, diversification, sector exposure, and supported hybrid select-then-exposure requests. Unsupported/ambiguous requests decline or ask for clarification; this is a bounded intent planner, not general natural-language SQL.
 
-When configured, Gemini remains available for requests outside local coverage. Gemini failure/invalid-plan handling can fall back for supported intents. Client status distinguishes configured, successful, unavailable, quota exhausted, and unconfigured. Route source appears in the UI.
+When configured, Gemini may handle requests outside local coverage, subject to provider availability, quota, and successful execution. Gemini failure/invalid-plan handling can fall back for supported intents. Client status distinguishes configured, successful, unavailable, quota exhausted, and unconfigured. Route source appears in the UI. The 11 unsupported cases in the extended offline evaluation are not evidence that Gemini answered them.
 
 ## Verified production evaluation
 
