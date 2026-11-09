@@ -25,7 +25,7 @@ Command: `python evaluate.py --local-fallback --min-accuracy 1.0`.
 
 ## Generalization and quality checks
 
-The production planner is exercised by 45 SQL paraphrase cases, 7 exposure cases, 4 hybrid cases and 14 negative cases (70 question examples), plus ambiguity/unknown-entity and safety checks. Full suite: 281 passed, including 35 dataset integrity tests. Ruff check/format pass. Live Gemini: not run. CI: run for commit `a255ecda` passed ([run details](https://github.com/Mrudula211/portfolio-analytics-agent/actions/runs/42555171699)). Deployment health endpoint: HTTP 200 `ok`; exact deployed commit and public login state remain unverified.
+The production planner is exercised by 45 SQL paraphrase cases, 7 exposure cases, 4 hybrid cases and 14 negative cases (70 question examples), plus ambiguity/unknown-entity and safety checks. Full suite: 281 passed, including 35 dataset integrity tests. Ruff check/format pass. Live Gemini: not run. CI: run for commit `a255ecda` passed ([run details](https://github.com/Mrudula211/portfolio-analytics-agent/actions/runs/42555331261)). Deployment health endpoint: HTTP 200 `ok`; exact deployed commit and public login state remain unverified.
 
 ## Extended production-agent fallback (no Gemini)
 
