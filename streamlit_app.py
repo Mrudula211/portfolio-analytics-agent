@@ -36,6 +36,7 @@ ROUTES = {
     "clarification": "Needs more detail",
     "validation": "Not run",
     "error": "Not answered",
+    "unsupported": "Unsupported request",
 }
 # What the sidebar says about Gemini. A client existing proves nothing; only a real request does.
 GEMINI_STATES = {
@@ -140,7 +141,7 @@ def show_reply(reply: dict) -> None:
     timing = "" if total is None else (f"{total:.1f} ms" if total < 1000 else f"{total / 1000:.2f} s")
     st.markdown(f"#### {escape(reply['question'])}")
     st.caption(" · ".join(part for part in (route_label(reply), timing) if part))
-    if reply["status"] in {"declined", "clarify"}:
+    if reply["status"] in {"declined", "clarify", "unsupported"}:
         st.info(reply["answer"])
         return
     if reply["status"] != "ok":

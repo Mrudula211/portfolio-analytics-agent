@@ -69,6 +69,7 @@ STATUS_DECLINED = "declined"
 STATUS_CLARIFY = "clarify"
 STATUS_BLOCKED = "blocked"
 STATUS_ERROR = "error"
+STATUS_UNSUPPORTED = "unsupported"
 STATUS_INVALID = "invalid"
 
 
@@ -300,7 +301,7 @@ class PortfolioAgent:
                 return self._answer_with_calls(question, links, local, route="local_deterministic")
             return AgentResponse(
                 question,
-                STATUS_ERROR,
+                STATUS_UNSUPPORTED,
                 "Gemini is not configured, and the deterministic local planner does not support this question. "
                 "Try a supported portfolio, AUM, holdings, sector, or diversification query.",
                 "error",

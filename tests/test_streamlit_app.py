@@ -67,7 +67,7 @@ def test_question_needing_the_model_reports_missing_key():
     app.text_input(key="question_box").set_value("How many bonds are there?")
     next(b for b in app.button if b.label == "Run").click()
     run(app)
-    assert app.error and "Gemini is not configured" in app.error[0].value
+    assert app.info and "Gemini is not configured" in app.info[0].value
 
 
 def test_public_page_opens_without_login_even_with_legacy_password_env(monkeypatch):
