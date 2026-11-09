@@ -23,12 +23,23 @@ Command: `python evaluate.py --local-fallback --min-accuracy 1.0`.
 
 `python evaluate.py --self-test --extended --min-accuracy 1.0` passed 40/40 exact with zero infrastructure errors. This is reference-plan replay through tools and scorer. It is not a production-agent planner evaluation and not a live Gemini run. Breakdown: 10 official, 30 extended (hybrid, safety, edge and other cases). See `reports/self_test_extended.md` for per-case details.
 
+## Latest recorded live Gemini evaluation
+
+The 40-question run recorded on 8 November 2026 scored 16 answers: **15 exact and 1 equivalent**. The other 24 attempts were infrastructure errors and were not scored. Thus 16/16 scored answers passed under strict scoring (which accepts exact and equivalent), but the run did not establish 40/40 live coverage. See the dated per-question evidence in `reports/live_extended.md`. This is historical live evidence; no new Gemini evaluation was run for this documentation update.
+
 ## Generalization and quality checks
 
-The production planner is exercised by 45 SQL paraphrase cases, 7 exposure cases, 4 hybrid cases and 14 negative cases (70 question examples), plus ambiguity/unknown-entity and safety checks. Full suite: 281 passed, including 35 dataset integrity tests. Ruff check/format pass. Live Gemini: not run. CI: run for commit `a255ecda` passed ([run details](https://github.com/Mrudula211/portfolio-analytics-agent/actions/runs/42555331261)). Deployment health endpoint: HTTP 200 `ok`; exact deployed commit and public login state remain unverified.
+The production planner is exercised by 45 SQL paraphrase cases, 7 exposure cases, 4 hybrid cases and 14 negative cases (70 question examples), plus ambiguity/unknown-entity and safety checks. The historical test baseline was 124 passed; the latest verified result is 281 passed, including 35 dataset integrity tests. Ruff check/format pass. CI: run for commit `a255ecda` passed ([run details](https://github.com/Mrudula211/portfolio-analytics-agent/actions/runs/42555331261)).
+
+## Deployment verification
+
+- **Source-code verification:** [streamlit_app.py](../streamlit_app.py), [render.yaml](../render.yaml), and [Dockerfile](../Dockerfile) show the Streamlit app is served without an application login gate.
+- **Render operational verification:** the deployed root and Streamlit health endpoint returned HTTP 200 in the recorded operational check; see the evidence table in [the 8 November validation report](validation_46f3a4a.md).
+- **Public access verification:** the owner confirms the deployed app is publicly accessible, opens in an incognito window, and does not require login.
+- **Deployment parity:** the exact commit served by Render has not been independently established. The access confirmation does not prove commit parity with this repository.
 
 ## Extended production-agent fallback (no Gemini)
 
 `python evaluate.py --local-fallback --extended` scored 29/40 exact and 11/40 fail (no infrastructure errors, 0 network attempts). The 11 unsupported cases are x02, x03, x05-x12, and x20. They request passive fund filters/AUM paraphrased as money, NAV/performance/risk history, historical prices, transactions, bond coupons/values, NVDA holdings, or a latest-beta hybrid. x21-x29 were blocked or declined with exact expected policy outcomes; x30 was clarified correctly. These are intentionally not represented as broad deterministic support. Report: `reports/local_fallback_extended.md`.
 
-The 40/40 extended self-test above remains reference-plan replay and must not be conflated with the 29/40 production fallback result.
+The 40/40 extended self-test above remains reference-plan replay and must not be conflated with the 29/40 production fallback result. Gemini may handle unsupported local questions when configured, subject to provider availability, quota, and successful execution; the 11 unsupported local cases are not evidence that Gemini answered them.

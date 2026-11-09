@@ -8,7 +8,7 @@ Models are tried in the order `gemini-3.1-flash-lite`, `gemini-3.5-flash`, `gemi
 
 ### Latest live validation
 
-Run on 8 November 2026 against the current checkout (`6d5d7aa` plus the uncommitted fixes in this workspace), with cache disabled. Full per-question report: [reports/live_extended.md](../reports/live_extended.md).
+Run on 8 November 2026 against the then-current checkout (`6d5d7aa` plus the uncommitted fixes in that workspace), with cache disabled. Of the 16 scored answers, 15 were exact and 1 was equivalent; 24 of 40 attempts were infrastructure errors and unscored. Full dated per-question report: [reports/live_extended.md](../reports/live_extended.md).
 
 | Measure | Result |
 | --- | --- |
