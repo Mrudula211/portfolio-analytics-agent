@@ -8,7 +8,7 @@ here, because accuracy measured on memorised answers would say nothing about new
 from __future__ import annotations
 
 from .metadata import GLOSSARY, Links
-from .semantics import ASSESSMENT_DIVERSIFICATION
+from .semantics import ASSESSMENT_DIVERSIFICATION, SUPERLATIVE_GUIDANCE, portfolio_superlative_for_question
 
 _RULES = """\
 You translate questions about an investment portfolio database into tool calls. Reply only with tool calls.
@@ -61,7 +61,7 @@ total_aum ASC LIMIT 1, then exposure_calculator: use_previous_sql_result=true
 
 def build_system_prompt(schema: str) -> str:
     """Static content only, so identical prefixes are eligible for provider-side caching."""
-    definitions = f"{GLOSSARY}\n- {ASSESSMENT_DIVERSIFICATION.description}"
+    definitions = f"{GLOSSARY}\n- {ASSESSMENT_DIVERSIFICATION.description}\n- {SUPERLATIVE_GUIDANCE}"
     return f"{_RULES}\n\nDatabase:\n{schema}\n\nDefinitions:\n{definitions}\n\n{_EXAMPLES}"
 
 
@@ -79,6 +79,12 @@ def build_user_prompt(question: str, links: Links) -> str:
         hints.append("Sectors mentioned, exact names: " + "; ".join(links.sectors))
     if links.securities:
         hints.append("Securities mentioned, filter on symbol: " + "; ".join(links.securities))
+    superlative = portfolio_superlative_for_question(question)
+    if superlative:
+        hints.append(
+            f"Interpretation: rank each portfolio by its latest available {superlative.metric_column}; "
+            f"{superlative.direction} order. Return portfolio_name and {superlative.metric_column}."
+        )
     hint_text = "\n".join(hints) + "\n" if hints else ""
     return f"{hint_text}<question>{_clean(question)}</question>"
 

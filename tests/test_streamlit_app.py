@@ -37,6 +37,15 @@ def test_page_lists_examples_dataset_and_evaluation():
     assert any(m.label == "Strict accuracy" for m in app.metric)
 
 
+def test_model_indicator_reports_configuration_not_connectivity(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "unit-test-key")
+    app = run(AppTest.from_file(APP))
+
+    sidebar_text = " ".join(m.value for m in app.sidebar.markdown)
+    assert "Gemini configured" in sidebar_text
+    assert "Gemini connected" not in sidebar_text
+
+
 def test_example_answers_from_stored_plan():
     app = run(AppTest.from_file(APP))
     example(app, "Which portfolio has the largest AUM?").click()
@@ -59,7 +68,7 @@ def test_question_needing_the_model_reports_missing_key():
     app.text_input(key="question_box").set_value("How many bonds are there?")
     next(b for b in app.button if b.label == "Run").click()
     run(app)
-    assert app.error and "GEMINI_API_KEY" in app.error[0].value
+    assert app.error and "No Gemini API key" in app.error[0].value
 
 
 def test_password_gate(monkeypatch):

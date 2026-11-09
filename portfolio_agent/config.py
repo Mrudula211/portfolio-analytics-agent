@@ -20,6 +20,7 @@ class Settings:
     gemini_fallback_models: tuple[str, ...] = ("gemini-3.5-flash", "gemini-3.6-flash")
     llm_timeout_s: float = 12.0
     llm_hedge_delay_s: float = 2.5
+    llm_quota_cooldown_s: float = 300.0  # After a rate-limit failure, skip Gemini for this long.
     db_path: Path = ROOT / "portfolio_database.db"
     data_dir: Path = ROOT / "data"
     schema_file: Path = ROOT / "database_schema.sql"

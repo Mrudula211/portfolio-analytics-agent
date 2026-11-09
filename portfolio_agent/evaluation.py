@@ -118,6 +118,10 @@ def _is_empty_row(row: list) -> bool:
     return any(v is None or v == 0 for v in numbers)
 
 
+def _reference_is_ordered(sql: str) -> bool:
+    return bool(re.search(r"\b(?:ORDER\s+BY|LIMIT)\b", sql, re.I))
+
+
 def compare_results(
     expected_columns: list[str],
     expected_rows: list[list],
@@ -126,7 +130,7 @@ def compare_results(
     *,
     ordered: bool = False,
 ) -> tuple[str, str]:
-    """Grade a result set. Row order counts only when the reference uses LIMIT (top-N)."""
+    """Grade a result set. Row order counts when the reference sorts (ORDER BY) or takes the top N (LIMIT)."""
     if not expected_rows:
         return (EXACT, "both empty") if not actual_rows else (FAIL, "expected no rows")
     if not actual_rows:
@@ -137,7 +141,12 @@ def compare_results(
         if extra and not all(_is_empty_row([row[j] for j in chosen]) for row in extra):
             return FAIL, f"{len(extra)} unexpected rows"
         if not extra and len(actual_columns) == len(expected_columns):
-            return EXACT, ""
+            same_labels = chosen == list(range(len(chosen))) and [c.casefold() for c in actual_columns] == [
+                c.casefold() for c in expected_columns
+            ]
+            if same_labels:
+                return EXACT, ""
+            return EQUIVALENT, "right data, but column labels or order differ from the reference"
         notes = []
         if len(actual_columns) > len(expected_columns):
             notes.append(f"{len(actual_columns) - len(expected_columns)} extra columns")
@@ -280,7 +289,7 @@ class Evaluator:
 
     def _grade(self, case: Case, reply: AgentResponse) -> tuple[str, str, bool]:
         """Returns (verdict, detail, whether the right tool or tools were used)."""
-        if reply.status == "error" and "unavailable" in reply.answer:
+        if reply.status == "error" and reply.llm.get("failure_category"):  # Gemini could not be reached.
             return INFRA_ERROR, "model unreachable", False
         used = {s.tool for s in reply.steps if s.error is None}
         if case.kind == "refuse":
@@ -292,13 +301,47 @@ class Evaluator:
             verdict, detail = _check_exposures(case, reply, self.oracle)
             return verdict, detail, used == {"exposure_calculator"}
         if case.kind == "hybrid":
+            sql_steps = _sql_steps(reply)
+            exposure_steps = _exposure_steps(reply)
+            sql_events = [i for i, step in enumerate(reply.steps) if step.tool == "run_sql"]
+            exposure_events = [i for i, step in enumerate(reply.steps) if step.tool == "exposure_calculator"]
+            if (
+                not case.sql
+                or len(sql_steps) != 1
+                or len(sql_events) != 1
+                or not exposure_steps
+                or len(exposure_steps) != len(exposure_events)
+                or sql_events[0] >= exposure_events[0]
+            ):
+                return FAIL, "hybrid requires one successful SQL selection and an exposure result", False
+            if not sql_steps[0].rows:
+                return FAIL, "hybrid SQL selection returned no portfolios", False
+            reference = execute_select(self.db, case.sql)
+            ordered = _reference_is_ordered(case.sql)
+            selection_verdict, selection_detail = compare_results(
+                reference.columns,
+                reference.rows,
+                sql_steps[0].columns or [],
+                sql_steps[0].rows or [],
+                ordered=ordered,
+            )
+            if selection_verdict not in _PASSING:
+                return FAIL, f"hybrid SQL selection failed: {selection_detail}", False
+            selected_names = {str(row[0]) for row in (sql_steps[0].rows or []) if row and row[0] is not None}
+            exposure_names = {step.exposure["portfolio_name"] for step in exposure_steps}
+            if len(exposure_names) != len(exposure_steps) or selected_names != exposure_names:
+                return (
+                    FAIL,
+                    f"exposures {sorted(exposure_names)} do not match SQL selection {sorted(selected_names)}",
+                    False,
+                )
             verdict, detail = _check_exposures(case, reply, self.oracle)
             return verdict, detail, used == {"run_sql", "exposure_calculator"}
         steps = _sql_steps(reply)
         if not steps or used != {"run_sql"}:
             return FAIL, f"expected run_sql, used {sorted(used)}", False
         reference = execute_select(self.db, case.sql)
-        ordered = bool(re.search(r"\bLIMIT\b", case.sql, re.I))
+        ordered = _reference_is_ordered(case.sql)
         verdict, detail = compare_results(
             reference.columns, reference.rows, steps[-1].columns or [], steps[-1].rows or [], ordered=ordered
         )

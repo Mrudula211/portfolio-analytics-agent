@@ -15,8 +15,8 @@ Note: Recorded weights and market values disagree by up to 11.2 points; the reco
 
 ## At a glance
 
-- **Original 10, three uncached live attempts:** 25 of 25 scored answers passed; 5 attempts were model outages. Q4 was unavailable all three times; Q5 passed once and was unavailable twice.
-- **Latest 40-question live run:** 16 of 16 scored answers passed; 24 attempts were model outages. See [the per-question report](reports/live_extended.md).
+- **Original 10, three uncached live attempts:** 25/25 scored answers passed, with 5/30 infrastructure failures. This is not a complete live 10/10: Q4 was unavailable all three times and Q5 twice.
+- **Latest 40-question live run:** 16/16 scored answers passed, with 24/40 infrastructure failures (40% end-to-end full credit counting outages as unsuccessful). This is not a complete live 40/40. See [the per-question report](reports/live_extended.md).
 - **Speed:**
   - under 1 ms for repeat questions
   - about 10 ms for sector exposure, which skips the model
@@ -32,7 +32,7 @@ Note: Recorded weights and market values disagree by up to 11.2 points; the reco
 | Command-line agent that chooses a tool | [agent.py](portfolio_agent/agent.py) | `--trace` shows the tool chosen |
 | Evaluator against the ground truth | [evaluate.py](evaluate.py), [evaluation.py](portfolio_agent/evaluation.py) | `python evaluate.py`, or `--self-test` without an API key |
 | Brief documentation and a diagram | This page and [docs/](docs/) | Diagram below |
-| Clean code with error handling | 124 tests, the `ruff` linter, CI on every push | `pytest` |
+| Clean code with error handling | 136 tests, Ruff lint and formatting, CI on every push | `pytest` |
 
 **Optional enhancements:**
 - **SQL safety:** parameterised queries, validation before execution and graceful database errors.
@@ -50,6 +50,7 @@ python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt
 cp .env.example .env               # then set GEMINI_API_KEY
+# Optional: set DEMO_PASSWORD to protect the Streamlit page with a sign-in form.
 python -m portfolio_agent "How many portfolios do we have in total?"
 ```
 
@@ -65,6 +66,12 @@ python -m portfolio_agent "How many portfolios do we have in total?"
 
 The database is built from the CSVs on the first run.
 
+Render serves the Streamlit interface. Configure `GEMINI_API_KEY` in the Render dashboard for model questions; configure `DEMO_PASSWORD` there only if the reviewer should enter a shared password. A configured API key means the client is set up, not that Gemini is reachable or has quota. The REST API is available when run separately and is not the interface served by the Render Docker command.
+
+## Ranking language
+
+For portfolio rankings, “strongest” and “best-performing” mean the highest latest available one-year total return; “safest” means the lowest latest available volatility; and “most efficient” means the highest latest available Sharpe ratio. Responses state the selected interpretation. These defaults compare only portfolios with recorded data (performance data exists for 4 of 13 portfolios). An unqualified “best,” “healthiest,” or “highest-quality” portfolio prompts for a metric because the dataset does not define one universal measure.
+
 ## How it works
 
 ```mermaid
@@ -74,7 +81,7 @@ flowchart LR
     C -- no --> L[Match names to database values]
     L --> F{Plain exposure request for one fund?}
     F -- yes --> E[Exposure calculator]
-    F -- no --> M[One Gemini call returns a tool plan]
+    F -- no --> M[Gemini returns a tool plan]
     M --> S[SQL guard, then run query]
     M --> E
     M --> D[Decline or ask to clarify]
@@ -86,7 +93,7 @@ flowchart LR
     T --> A
 ```
 
-- **One Gemini call per question**, which returns the whole plan, including both steps of a hybrid question.
+- **One logical planning call per question** returns the whole plan, including both steps of a hybrid question. A repair can add another planning call; hedged model fallbacks can submit up to three provider requests per planning call.
 - **Code writes the answer,** so the model cannot misquote or invent a figure.
 - **Sector exposure for one named fund skips the model.**
 - **Hedged requests:** if a model is slow or fails, the next one starts after 2.5 s, and the first answer wins.
@@ -98,3 +105,4 @@ How this design was reached through ten Gemini experiments is in [docs/EXPERIMEN
 - [docs/RESULTS.md](docs/RESULTS.md): live results, stability, how answers are graded, and what the data and ground truth revealed.
 - [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md): every Gemini experiment and why the agent calls Gemini the way it does.
 - [docs/DESIGN.md](docs/DESIGN.md): design decisions and trade-offs, safety, the REST API, deployment and the project layout.
+- [reports/pre_submission_final_audit.md](reports/pre_submission_final_audit.md): final repository audit, verification results and remaining limitations.

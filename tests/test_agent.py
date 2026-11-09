@@ -11,7 +11,7 @@ from portfolio_agent.llm import LLMError, ToolCall
 def test_simple_exposure_uses_no_model(make_agent):
     agent = make_agent()
     reply = agent.answer_question("What are the sector exposures for the Tech Innovation Fund?")
-    assert reply.route == "fast_path" and reply.status == "ok"
+    assert reply.route == "direct_calculator" and reply.status == "ok"
     assert reply.llm["calls"] == 0 and agent.llm.prompts == []
     assert "Technology" in reply.answer
 
@@ -26,7 +26,7 @@ def test_simple_exposure_uses_no_model(make_agent):
 )
 def test_harder_exposure_questions_go_to_the_model(make_agent, question):
     agent = make_agent({question: [sql_call("SELECT 1")]})
-    assert agent.answer_question(question).route == "model"
+    assert agent.answer_question(question).route == "gemini"
 
 
 def test_one_model_call_for_sql_question(make_agent):
@@ -35,6 +35,73 @@ def test_one_model_call_for_sql_question(make_agent):
     reply = agent.answer_question(question)
     assert reply.status == "ok" and "13" in reply.answer
     assert len(agent.llm.prompts) == 1
+
+
+@pytest.mark.parametrize("question", ["Which is the strongest portfolio?", "Which fund is the best-performing?"])
+def test_strongest_portfolio_uses_latest_one_year_return_and_discloses_meaning(make_agent, question):
+    query = """WITH latest AS (
+                   SELECT portfolio_id, MAX(performance_date) AS latest_date
+                   FROM portfolio_performance
+                   WHERE total_return_1y IS NOT NULL
+                   GROUP BY portfolio_id
+               )
+               SELECT p.portfolio_name, pp.total_return_1y
+               FROM latest l
+               JOIN portfolio_performance pp
+                 ON pp.portfolio_id=l.portfolio_id AND pp.performance_date=l.latest_date
+               JOIN portfolios p ON p.portfolio_id=l.portfolio_id
+               ORDER BY pp.total_return_1y DESC LIMIT 1"""
+    wrong = """SELECT p.portfolio_name, pp.volatility
+               FROM portfolio_performance pp JOIN portfolios p ON p.portfolio_id=pp.portfolio_id
+               ORDER BY pp.volatility DESC LIMIT 1"""
+    agent = make_agent({question: [sql_call(wrong)]}, [query])
+
+    reply = agent.answer_question(question, use_cache=False)
+
+    assert reply.status == "ok"
+    assert len(agent.llm.prompts) == 2
+    assert "total_return_1y" in agent.llm.prompts[1]
+    assert reply.steps[-1].columns == ["portfolio_name", "total_return_1y"]
+    assert reply.answer.startswith("Interpreting this as the highest latest available one-year total return")
+
+
+@pytest.mark.parametrize(
+    "question",
+    ["Which is the best portfolio?", "Which is the healthiest fund?", "Which is the highest-quality portfolio?"],
+)
+def test_ambiguous_portfolio_quality_question_asks_for_metric_without_model(make_agent, question):
+    agent = make_agent()
+
+    reply = agent.answer_question(question, use_cache=False)
+
+    assert reply.status == "clarify"
+    assert "which measure" in reply.answer.casefold()
+    assert agent.llm.prompts == []
+
+
+@pytest.mark.parametrize(
+    ("question", "metric", "direction"),
+    [
+        ("Which is the safest portfolio?", "volatility", "ASC"),
+        ("Which is the most efficient fund?", "sharpe_ratio", "DESC"),
+    ],
+)
+def test_documented_portfolio_defaults_reach_the_planner(make_agent, question, metric, direction):
+    query = f"""WITH latest AS (
+                    SELECT portfolio_id, MAX(performance_date) AS latest_date
+                    FROM portfolio_performance WHERE {metric} IS NOT NULL GROUP BY portfolio_id
+                )
+                SELECT p.portfolio_name, pp.{metric}
+                FROM latest l JOIN portfolio_performance pp
+                  ON pp.portfolio_id=l.portfolio_id AND pp.performance_date=l.latest_date
+                JOIN portfolios p ON p.portfolio_id=l.portfolio_id
+                ORDER BY pp.{metric} {direction} LIMIT 1"""
+    agent = make_agent({question: [sql_call(query)]})
+
+    reply = agent.answer_question(question, use_cache=False)
+
+    assert reply.status == "ok"
+    assert f"{metric}; {direction} order" in agent.llm.prompts[0]
 
 
 def test_hybrid_plan_needs_one_model_call(make_agent):
@@ -124,16 +191,17 @@ def test_model_outage_is_reported_cleanly(make_agent):
 
     agent = make_agent()
     agent.llm = Down()
-    reply = agent.answer_question("How many funds?")
+    reply = agent.answer_question("How many bonds are there?")  # Not a question the local planner supports.
     assert reply.status == "error" and "unavailable" in reply.answer and "boom" not in reply.answer
+    assert reply.route == "error" and reply.llm["failure_category"]
 
 
-def test_no_api_key_still_serves_fast_path(settings):
+def test_no_api_key_still_serves_direct_calculator(settings):
     agent = PortfolioAgent(settings)
     assert agent.llm is None
     assert agent.answer_question("sector exposure of Balanced Portfolio").status == "ok"
-    missing = agent.answer_question("How many funds?")
-    assert missing.status == "error" and "GEMINI_API_KEY" in missing.answer
+    missing = agent.answer_question("How many bonds are there?")
+    assert missing.status == "error" and "No Gemini API key" in missing.answer and missing.route == "error"
 
 
 @pytest.mark.parametrize("question", ["", "   ", "x" * 501])
@@ -217,7 +285,7 @@ def test_stored_plan_with_invalid_sql_and_no_model_does_not_crash(settings):
     assert agent.cache.get("a stored question") is None
 
 
-def test_daily_model_cap_is_shared_but_spares_cache_and_fast_path(settings):
+def test_daily_model_cap_is_shared_but_spares_cache_and_direct_calculator(settings):
     from portfolio_agent.llm import ScriptedLLM
 
     questions = ["Count the portfolios", "Count the bonds", "Count the stocks"]
@@ -228,7 +296,7 @@ def test_daily_model_cap_is_shared_but_spares_cache_and_fast_path(settings):
     limited = agent.answer_question(questions[2])
     assert limited.status == "error" and "daily limit" in limited.answer
     assert agent.answer_question(questions[0]).route == "cache"
-    assert agent.answer_question("sector exposure of Balanced Portfolio").route == "fast_path"
+    assert agent.answer_question("sector exposure of Balanced Portfolio").route == "direct_calculator"
 
 
 @pytest.mark.parametrize(

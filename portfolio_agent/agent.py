@@ -1,8 +1,16 @@
 """The agent: route a question through the cheapest path that can answer it correctly.
 
-cache hit          exact repeat                      no model, no database
-fast path          "sector exposure of <one fund>"   no model
-model plan         everything else                   one call; a second only to repair SQL
+Route precedence, first match wins:
+
+cache               exact repeat of an answered question          no model, no database
+direct_calculator   "sector exposure of <one fund>"               no model
+gemini              everything else, when Gemini is reachable     one call, plus one to repair SQL
+local_fallback      Gemini failed, or its plan was unusable       deterministic planner, no model
+local_deterministic no Gemini key is configured                   deterministic planner, no model
+error / clarification / validation   nothing could answer, or the question needs more detail
+
+The deterministic planner (local_planner.py) only answers intents it supports. For anything else
+the agent says so rather than guessing. SQL blocked by the guard is never retried or replaced.
 """
 
 from __future__ import annotations
@@ -20,20 +28,16 @@ from .cache import AnswerCache, normalize_question
 from .config import Settings
 from .db import ensure_database
 from .llm import GeminiClient, LLMClient, LLMError, LLMResponse, ToolCall
+from .local_planner import EXPOSURE_INTENT, LocalPlanner
 from .metadata import EntityLinker, Links, SchemaCatalog
 from .prompts import build_repair_prompt, build_system_prompt, build_user_prompt
 from .render import render_exposure, render_sql
-from .semantics import validate_result
+from .semantics import ambiguous_portfolio_superlative, validate_result
 from .sql_guard import QueryResult, SQLBlocked, SQLExecutionError
 from .tools import AmbiguousPortfolio, Tools
 
 log = logging.getLogger(__name__)
 
-_EXPOSURE_INTENT = re.compile(
-    r"\b(?:sector\s+(?:exposures?|breakdown|allocations?|weights?|weightings?|mix|split)"
-    r"|exposures?\s+(?:by|across|per)\s+sector)\b",
-    re.I,
-)
 # Words that mean the question asks for more than one fund's plain breakdown.
 _NOT_SIMPLE = re.compile(
     r"\b(?:how many|which|compare|versus|vs|highest|lowest|largest|smallest|biggest|top|most|least|"
@@ -45,6 +49,9 @@ _DISCOVERY_TERMS = re.compile(
     r"\b(?:highest|lowest|largest|smallest|biggest|top|max(?:imum)?|min(?:imum)?|all|each|every|passive|active)\b",
     re.I,
 )
+
+LOCAL_ROUTES = {"local_fallback", "local_deterministic"}
+NO_MODEL_ROUTES = LOCAL_ROUTES | {"direct_calculator"}
 
 STATUS_OK = "ok"
 STATUS_DECLINED = "declined"
@@ -105,6 +112,8 @@ class PortfolioAgent:
         self.cache = AnswerCache(self.settings.cache_size)
         self._system = build_system_prompt(self.catalog.render())
         self.llm = llm if llm is not None else self._default_llm()
+        self.planner = LocalPlanner(self.settings.db_path)
+        self._gemini = {"state": "configured" if self.llm else "not_configured", "detail": "", "blocked_until": 0.0}
         self._budget = {"day": None, "used": 0}
         self._budget_lock = threading.Lock()
 
@@ -115,6 +124,28 @@ class PortfolioAgent:
             log.warning("llm_disabled reason=no_api_key")
             return None
 
+    @property
+    def gemini_status(self) -> dict:
+        """Gemini's state: not_configured, configured (no request yet), ok, unavailable or quota_exhausted.
+
+        "ok" means the most recent real request succeeded; a client existing proves nothing.
+        """
+        return {"state": self._gemini["state"], "detail": self._gemini["detail"]}
+
+    def _gemini_blocked(self) -> bool:
+        return time.monotonic() < self._gemini["blocked_until"]
+
+    def _record_gemini_failure(self, error: LLMError) -> None:
+        categories = set(error.category.split("+"))
+        if categories == {"rate_limit"}:  # Quota or rate limit: stop asking for a while.
+            self._gemini.update(
+                state="quota_exhausted",
+                detail="rate limit or quota",
+                blocked_until=time.monotonic() + self.settings.llm_quota_cooldown_s,
+            )
+        else:
+            self._gemini.update(state="unavailable", detail=error.category)
+
     def preload(self, question: str, calls: list[ToolCall]) -> None:
         """Cache the answer to a demo question from a stored plan, so it costs no model call.
 
@@ -123,7 +154,8 @@ class PortfolioAgent:
         if not calls:  # Fast-path questions need no plan; answering once caches them.
             self.answer_question(question)
             return
-        reply = self._answer_with_calls(question, self.linker.link(question), LLMResponse(calls), route="model")
+        reply = self._answer_with_calls(question, self.linker.link(question), LLMResponse(calls), route="gemini")
+        reply.llm["prepared_example"] = True  # A stored plan, not a live model call.
         if reply.status in {STATUS_OK, STATUS_DECLINED}:
             self.cache.put(normalize_question(question), reply)
 
@@ -145,13 +177,24 @@ class PortfolioAgent:
                 reply.timings_ms = {"total": round((time.perf_counter() - started) * 1000, 3)}
                 return reply
 
+        if ambiguous_portfolio_superlative(question):
+            return AgentResponse(
+                question,
+                STATUS_CLARIFY,
+                "Which measure should define this portfolio ranking: one-year return, lowest volatility, "
+                "Sharpe ratio, or another metric?",
+                "clarification",
+                request_id,
+                timings_ms={"total": round((time.perf_counter() - started) * 1000, 3)},
+            )
+
         links = self.linker.link(question)
         if self._is_simple_exposure(question, links):
             reply = self._answer_with_calls(
                 question,
                 links,
                 LLMResponse([ToolCall("exposure_calculator", {"portfolio_names": links.portfolios})]),
-                route="fast_path",
+                route="direct_calculator",
             )
         else:
             reply = self._answer_with_model(question, links)
@@ -175,7 +218,7 @@ class PortfolioAgent:
         return (
             len(links.portfolios) == 1
             and not links.sectors
-            and bool(_EXPOSURE_INTENT.search(question))
+            and bool(EXPOSURE_INTENT.search(question))
             and not _NOT_SIMPLE.search(question)
         )
 
@@ -194,45 +237,65 @@ class PortfolioAgent:
             return True
 
     def _answer_with_model(self, question: str, links: Links) -> AgentResponse:
+        """Gemini plans the question; the local planner covers for it when it cannot."""
+        local = self.planner.plan(question, links)
         if self.llm is None:
+            if local:
+                return self._answer_with_calls(question, links, local, route="local_deterministic")
             return AgentResponse(
                 question,
                 STATUS_ERROR,
-                "This question needs the language model, and GEMINI_API_KEY is not set. "
-                "Sector exposure questions for a named portfolio still work without it.",
-                "model",
+                "No Gemini API key is configured, and the local planner does not support this question. "
+                "Sector exposure questions for a named portfolio still work.",
+                "error",
             )
+        if self._gemini_blocked():
+            return self._fallback(question, links, local, "quota_exhausted", "Gemini is rate limited right now")
         if not self._take_model_budget():
-            return AgentResponse(
-                question,
-                STATUS_ERROR,
-                "This demo has reached its daily limit for new questions. The example questions and sector "
-                "exposure questions for a named fund still work.",
-                "model",
-            )
+            return self._fallback(question, links, local, "daily_cap", "This demo has reached its daily limit")
         started = time.perf_counter()
         try:
             plan = self.llm.plan(self._system, build_user_prompt(question, links))
         except LLMError as exc:
             log.warning("llm_failed reason=%s", exc)
-            return AgentResponse(
-                question,
-                STATUS_ERROR,
-                "The language model is unavailable right now. Please try again shortly.",
-                "model",
-                timings_ms={"llm": round((time.perf_counter() - started) * 1000, 3)},
-                llm={"failure_category": exc.category},
-            )
+            self._record_gemini_failure(exc)
+            reason = "quota_exhausted" if self._gemini["state"] == "quota_exhausted" else exc.category
+            return self._fallback(question, links, local, reason, "Gemini is unavailable right now")
+        self._gemini.update(state="ok", detail="", blocked_until=0.0)
         plan.latency_ms = (time.perf_counter() - started) * 1000  # Includes retries and fallback.
         if self._requires_hybrid(question, links):
             plan = self._complete_hybrid_plan(plan)
-        return self._answer_with_calls(question, links, plan, route="model")
+        reply = self._answer_with_calls(question, links, plan, route="gemini")
+        if reply.status == STATUS_ERROR and local:  # An unusable plan; blocked or declined answers stand.
+            fallback = self._answer_with_calls(question, links, local, route="local_fallback")
+            fallback.llm.update(
+                fallback=True, fallback_reason="invalid_gemini_plan", gemini_calls=reply.llm.get("calls", 1)
+            )
+            return fallback
+        return reply
+
+    def _fallback(
+        self, question: str, links: Links, local: LLMResponse | None, reason: str, unavailable: str
+    ) -> AgentResponse:
+        """Answer with the local planner when it supports the question; otherwise say why not."""
+        if local:
+            reply = self._answer_with_calls(question, links, local, route="local_fallback")
+            reply.llm.update(fallback=True, fallback_reason=reason)
+            return reply
+        return AgentResponse(
+            question,
+            STATUS_ERROR,
+            f"{unavailable}, and the local planner does not support this question. "
+            "Please try again shortly, or ask for a sector exposure of a named fund.",
+            "error",
+            llm={"failure_category": reason},
+        )
 
     @staticmethod
     def _requires_hybrid(question: str, links: Links) -> bool:
         """An exposure request over a discovered set of portfolios needs SQL plus calculation."""
         return (
-            bool(_EXPOSURE_INTENT.search(question))
+            bool(EXPOSURE_INTENT.search(question))
             and not links.portfolios
             and not links.candidates
             and bool(_DISCOVERY_TERMS.search(question))
@@ -259,7 +322,7 @@ class PortfolioAgent:
     def _answer_with_calls(self, question: str, links: Links, plan: LLMResponse, *, route: str) -> AgentResponse:
         reply = AgentResponse(question, STATUS_OK, "", route)
         llm_ms = plan.latency_ms
-        usage = {"calls": 0 if route == "fast_path" else 1, "model": plan.model}
+        usage = {"calls": 0 if route in NO_MODEL_ROUTES else 1, "model": plan.model}
         usage.update(prompt_tokens=plan.prompt_tokens, output_tokens=plan.output_tokens)
         sections: list[str] = []
         previous: QueryResult | None = None
@@ -275,7 +338,7 @@ class PortfolioAgent:
                         and bool(plan.calls[index + 1].args.get("use_previous_sql_result"))
                     )
                     previous, section, repair = self._run_sql_step(
-                        question, links, call, reply, require_rows=needs_followup
+                        question, links, call, reply, require_rows=needs_followup, may_repair=route not in LOCAL_ROUTES
                     )
                     sections.append(section)
                     if repair is not None:
@@ -307,7 +370,14 @@ class PortfolioAgent:
         return reply
 
     def _run_sql_step(
-        self, question: str, links: Links, call: ToolCall, reply: AgentResponse, *, require_rows: bool = False
+        self,
+        question: str,
+        links: Links,
+        call: ToolCall,
+        reply: AgentResponse,
+        *,
+        require_rows: bool = False,
+        may_repair: bool = True,
     ) -> tuple[QueryResult, str, LLMResponse | None]:
         sql = str(call.args.get("sql", ""))
         title = str(call.args.get("title", ""))
@@ -321,7 +391,7 @@ class PortfolioAgent:
                 if issue:
                     raise SQLExecutionError(issue)
             except SQLExecutionError as exc:  # Invalid but harmless: one repair attempt.
-                if self.llm is None:  # No model to repair with, e.g. a stored plan without a key.
+                if self.llm is None or not may_repair:  # No model to repair with, or a local plan.
                     raise
                 repair = self.llm.plan(self._system, build_repair_prompt(question, links, sql, str(exc)))
                 declined = next((c for c in repair.calls if c.name == "decline"), None)

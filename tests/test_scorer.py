@@ -10,6 +10,7 @@ from portfolio_agent.evaluation import (
     EXACT,
     FAIL,
     PARTIAL,
+    Case,
     Evaluator,
     ExposureOracle,
     compare_results,
@@ -32,9 +33,19 @@ def test_row_order_ignored_unless_top_n():
     assert compare_results(COLS, ROWS, COLS, shuffled, ordered=True)[0] == FAIL
 
 
-def test_column_order_and_names_ignored():
-    actual = [[1.5, "A"], [2.5, "B"], [3.5, "C"]]
-    assert compare_results(COLS, ROWS, ["v", "n"], actual)[0] == EXACT
+def test_right_values_under_wrong_labels_or_order_are_not_exact():
+    reordered = [[1.5, "A"], [2.5, "B"], [3.5, "C"]]
+    assert compare_results(COLS, ROWS, ["v", "n"], reordered)[0] == EQUIVALENT
+    assert compare_results(COLS, ROWS, ["label", "amount"], ROWS)[0] == EQUIVALENT
+    assert compare_results(COLS, ROWS, ["NAME", "Value"], ROWS)[0] == EXACT  # Case does not matter.
+
+
+def test_reference_order_by_is_enforced_without_limit():
+    from portfolio_agent.evaluation import _reference_is_ordered
+
+    assert _reference_is_ordered("SELECT a FROM t ORDER BY a DESC")
+    assert _reference_is_ordered("SELECT a FROM t LIMIT 3")
+    assert not _reference_is_ordered("SELECT a FROM t")
 
 
 def test_values_paired_with_wrong_row_fail():
@@ -110,17 +121,80 @@ def test_left_join_reading_of_question_seven_passes(settings, make_agent):
                      {tech} * 100.0 / SUM(h.quantity * s.current_price) AS tech_percentage
               FROM portfolios p JOIN holdings h ON h.portfolio_id = p.portfolio_id
               JOIN securities s ON s.security_id = h.security_id
-              LEFT JOIN sectors sec ON sec.sector_id = s.sector_id GROUP BY p.portfolio_id"""
+              LEFT JOIN sectors sec ON sec.sector_id = s.sector_id GROUP BY p.portfolio_id
+              ORDER BY tech_percentage DESC"""
     result = Evaluator(make_agent({case.question: [sql_call(sql)]}), settings.data_dir).run_case(case)
     assert result.verdict == EQUIVALENT, result.detail
+    unsorted = sql.replace("ORDER BY tech_percentage DESC", "ORDER BY portfolio_name")
+    result = Evaluator(make_agent({case.question: [sql_call(unsorted)]}), settings.data_dir).run_case(case)
+    assert result.verdict == FAIL  # The reference sorts by percentage, so the order matters.
 
 
 def test_using_sql_for_exposure_question_fails_tool_selection(settings, make_agent):
     case = _ground_truth_case("gt09")
     evaluator = Evaluator(make_agent(), settings.data_dir)
-    reply = AgentResponse(case.question, "ok", "x", "model", steps=[Step("run_sql", {"sql": "SELECT 1"}, ["a"], [[1]])])
+    reply = AgentResponse(
+        case.question, "ok", "x", "gemini", steps=[Step("run_sql", {"sql": "SELECT 1"}, ["a"], [[1]])]
+    )
     verdict, _, tool_correct = evaluator._grade(case, reply)
     assert verdict == FAIL and not tool_correct
+
+
+def test_hybrid_grade_checks_sql_selection_not_only_exposure(settings, make_agent):
+    from portfolio_agent.evaluation import load_extended
+
+    case = next(c for c in load_extended(settings.data_dir.parent / "eval" / "extended_dataset.json") if c.id == "x20")
+    agent = make_agent()
+    expected_exposure = agent.tools.exposure_calculator(case.portfolios[0]).to_dict()
+    reply = AgentResponse(
+        case.question,
+        "ok",
+        "",
+        "model",
+        steps=[
+            Step(
+                "run_sql",
+                {"sql": "SELECT 'Balanced Portfolio' AS portfolio_name"},
+                ["portfolio_name"],
+                [["Balanced Portfolio"]],
+            ),
+            Step("exposure_calculator", {"portfolio_name": case.portfolios[0]}, exposure=expected_exposure),
+        ],
+    )
+
+    verdict, detail, tool_correct = Evaluator(agent, settings.data_dir)._grade(case, reply)
+
+    assert verdict == FAIL
+    assert "SQL selection failed" in detail
+    assert not tool_correct
+
+
+@pytest.mark.parametrize("defect", ["empty_selection", "duplicate_exposure", "exposure_before_sql"])
+def test_hybrid_grade_rejects_incomplete_or_malformed_execution(settings, make_agent, defect):
+    from portfolio_agent.evaluation import load_extended
+
+    case = next(c for c in load_extended(settings.data_dir.parent / "eval" / "extended_dataset.json") if c.id == "x20")
+    agent = make_agent()
+    evaluator = Evaluator(agent, settings.data_dir)
+    if defect == "empty_selection":
+        steps = [
+            Step("run_sql", {"sql": case.sql}, ["portfolio_name"], []),
+        ]
+    else:
+        selected = agent.tools.run_sql(case.sql)
+        sql_step = Step("run_sql", {"sql": case.sql}, selected.columns, selected.rows)
+        exposure = agent.tools.exposure_calculator(case.portfolios[0]).to_dict()
+        exposure_step = Step("exposure_calculator", {"portfolio_name": case.portfolios[0]}, exposure=exposure)
+        if defect == "duplicate_exposure":
+            steps = [sql_step, exposure_step, exposure_step]
+        else:
+            steps = [exposure_step, sql_step]
+    reply = AgentResponse(case.question, "ok", "", "gemini", steps=steps)
+
+    verdict, _, tool_correct = evaluator._grade(case, reply)
+
+    assert verdict == FAIL
+    assert not tool_correct
 
 
 def test_tampered_exposure_fails(settings, make_agent):
@@ -146,7 +220,9 @@ def test_oracle_matches_tool_for_every_portfolio(settings, make_agent):
 
 
 def test_infra_errors_are_not_counted_as_wrong_answers(settings, make_agent):
-    case = _ground_truth_case("gt01")
+    case = Case(
+        "t1", "c", "-", "How many bonds are there?", "sql", "SELECT COUNT(*) FROM securities WHERE asset_type = 'Bond'"
+    )
     result = Evaluator(make_agent(), settings.data_dir).run_case(case)  # No script, so the model is "down".
     assert result.verdict == "infra_error"
     summary = summarize([result])
@@ -181,7 +257,7 @@ def test_stability_counts_questions_whose_verdict_changes():
     from portfolio_agent.evaluation import CaseResult
 
     def result(case_id, verdict):
-        return CaseResult(case_id, "c", "-", "q", verdict, "", True, "model", "ok", 1.0, 1.0, 1)
+        return CaseResult(case_id, "c", "-", "q", verdict, "", True, "gemini", "ok", 1.0, 1.0, 1)
 
     runs = [result("a", EXACT), result("b", EXACT), result("a", EQUIVALENT), result("b", FAIL)]
     stability = summarize(runs)["stability"]
@@ -193,7 +269,7 @@ def test_stability_ignores_questions_whose_other_runs_were_outages():
     from portfolio_agent.evaluation import INFRA_ERROR, CaseResult
 
     def result(case_id, verdict):
-        return CaseResult(case_id, "c", "-", "q", verdict, "", True, "model", "ok", 1.0, 1.0, 1)
+        return CaseResult(case_id, "c", "-", "q", verdict, "", True, "gemini", "ok", 1.0, 1.0, 1)
 
     runs = [result("a", EXACT), result("a", EXACT), result("b", FAIL), result("b", INFRA_ERROR)]
     assert summarize(runs)["stability"] == {"questions": 1, "consistent": 1, "unstable": [], "scored_once": ["b"]}

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 
+from .semantics import superlative_interpretation
 from .sql_guard import QueryResult
 from .tools import ExposureResult
 
@@ -55,12 +56,14 @@ def safe_title(title: str, question: str) -> str:
 
 def render_sql(result: QueryResult, title: str, question: str) -> str:
     label = safe_title(title, question)
-    prefix = f"{label}\n" if label else ""
+    interpretation = superlative_interpretation(question)
+    header = f"{interpretation}\n" if interpretation else ""
+    prefix = header + (f"{label}\n" if label else "")
     if not result.rows:
         return f"{prefix}No matching records were found."
     if len(result.rows) == 1 and len(result.columns) == 1:
         value = format_value(result.rows[0][0], result.columns[0])
-        return f"{label}: {value}" if label else value
+        return f"{prefix}{label + ': ' if label else ''}{value}"
     if len(result.columns) == 1:
         items = [format_value(row[0], result.columns[0]) for row in result.rows]
         shown = ", ".join(items[:_MAX_LIST_ITEMS])

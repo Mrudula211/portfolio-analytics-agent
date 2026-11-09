@@ -31,8 +31,10 @@ st.html(
 
 ROUTES = {
     "cache": "Cached",
-    "fast_path": "Calculator, no model call",
-    "model": "Gemini plan + SQL",
+    "direct_calculator": "Calculator, no model call",
+    "gemini": "Gemini plan + SQL",
+    "local_deterministic": "Local planner, no model call",
+    "local_fallback": "Local planner (Gemini unavailable)",
     "validation": "Not run",
 }
 BAR_COLOUR = "#2a2ad0"  # Royal blue that passes contrast checks on white.
@@ -199,7 +201,7 @@ agent, examples, limiter = load_agent()
 facts, notes = load_facts(str(agent.settings.db_path))
 
 with st.sidebar:
-    status = ":green[●] Gemini connected" if agent.llm else ":red[●] Gemini not configured"
+    status = ":green[●] Gemini configured" if agent.llm else ":red[●] Gemini not configured"
     st.markdown(status)
     st.markdown("**Examples**")
     for index, example in enumerate(examples):

@@ -16,7 +16,7 @@ def client(make_agent):
 
 def test_ask_returns_answer_and_trace(client):
     body = client.post("/api/ask", json={"question": "How many portfolios exist?"}).json()
-    assert body["status"] == "ok" and body["route"] == "model" and "13" in body["answer"]
+    assert body["status"] == "ok" and body["route"] == "gemini" and "13" in body["answer"]
     assert body["steps"][0]["input"]["sql"].startswith("SELECT")
     assert body["timings_ms"]["total"] > 0
 

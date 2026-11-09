@@ -32,11 +32,11 @@ The problems retrieval is usually brought in to solve are handled more directly:
 
 **When a vector database becomes right:** hundreds of tables, or the unstructured work in this role's description, such as searching research reports and financial documents. Those are real retrieval problems.
 
-## One model call, then code
+## One model plan, then code
 
 The usual agent loop calls the model, runs a tool, sends the result back, and calls the model again to write a sentence. That costs two or more round trips and gives the model a chance to misquote a figure.
 
-Here, Gemini is forced to reply with tool calls, and can return several in one reply. Hybrid questions become `run_sql` followed by `exposure_calculator(use_previous_sql_result=true)`, and the executor connects them with no further model call. Code then formats the answer.
+Here, Gemini is forced to reply with tool calls, and can return several in one reply. Hybrid questions become `run_sql` followed by `exposure_calculator(use_previous_sql_result=true)`, and the executor connects them with no further planning call. Code then formats the answer.
 
 **The trade-off:** the wording is plainer than a model's prose, and a plan cannot adapt to what a query returned. For an analytics tool, being exact and fast matters more than prose. A question needing true multi-step reasoning would require a loop, which could be added as a separate route.
 
@@ -46,7 +46,11 @@ The one piece of model-written text shown to users is a short result title, and 
 
 Free-tier latency is bimodal (about 1 s or over 10 s for identical requests), and failures are common. So the client turns off the SDK's retries and hedges instead: it asks the first model, starts the next after 2.5 s or on any failure, and takes the first answer. The order is `gemini-3.1-flash-lite`, then `gemini-3.5-flash`, then `gemini-3.6-flash`, chosen by measurement. All ten experiments behind these choices are in [EXPERIMENTS.md](EXPERIMENTS.md).
 
-**The trade-offs:** a hedge uses extra quota when it fires, and which model answers can vary, so every evaluation report records the answering model. Free-tier latency changes from day to day, so the order is worth re-measuring before relying on it.
+**The trade-offs:** a hedge uses extra quota when it fires, and which model answers can vary, so every evaluation report records the answering model. One plan can submit up to three provider requests; a SQL repair is another plan and can raise the worst case to six. The evaluation counter reports logical plan calls, not hedge requests. Free-tier latency changes from day to day, so the order is worth re-measuring before relying on it. For low-quota validation, set `GEMINI_FALLBACK_MODELS` to an empty list (`,` in PowerShell) to avoid fallback submissions.
+
+## Portfolio ranking terms
+
+Some financial superlatives have a documented default: strongest/best-performing uses the highest latest available one-year total return; safest uses the lowest latest available volatility; and most efficient uses the highest latest available Sharpe ratio. The answer states the selected interpretation and is checked against each portfolio's latest available performance row. Only 4 of 13 portfolios have performance history, so rankings are qualified as covering portfolios with available data. An unqualified best, healthiest or highest-quality question asks the user which measure they mean. These defaults are application semantics, not universal financial definitions.
 
 ## Deterministic fast path
 
@@ -66,6 +70,8 @@ The worked examples in the prompt deliberately use other questions and tables th
 
 The original assessment leaves Q5's projection expectations and Q8's ratio semantics underspecified in the question text, while its provided reference defines them. The current implementation adds generic holding-row projection rules and an explicitly labelled, assessment-defined sector-diversification ratio. It includes the stated formula and field meanings, but does not include the assessment question text, question IDs, reference SQL, or expected answer rows. Deterministic checks compare generated results with a separate calculation from holding facts. These two cases are now informed by the assessment requirements and should not be described as blind tests; their purpose is to check that the app follows the stated acceptance criteria and remains correct on paraphrases.
 
+Hybrid scoring checks the SQL selection against its reference result, verifies that the exposure calculations use those selected portfolios, and checks the exposure values independently.
+
 The 30 extra questions in `eval/extended_dataset.json` were written before any tuning, but three fixes (x06, x08 and the percentage example) were made after seeing failures there. They are therefore no longer a blind test. An honest number from here needs new questions the agent has never been tuned on.
 
 ## Web UI: Streamlit, with a separate REST API
@@ -83,6 +89,7 @@ Colours follow plindia.com, and its Figtree typeface is self-hosted. Text from u
 - Streamlit re-runs the script on every interaction. The agent and dataset facts are cached, so a re-run is cheap.
 - Its look can only be adjusted so far.
 - It cannot send HTTP Basic auth challenges, so the demo password is a sign-in form instead.
+- The Gemini status says “configured” when a client is constructed; it does not claim the provider is reachable.
 
 ## Stored plans for demo questions
 
