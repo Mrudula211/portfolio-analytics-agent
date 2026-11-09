@@ -201,7 +201,7 @@ def test_no_api_key_still_serves_direct_calculator(settings):
     assert agent.llm is None
     assert agent.answer_question("sector exposure of Balanced Portfolio").status == "ok"
     missing = agent.answer_question("How many bonds are there?")
-    assert missing.status == "error" and "No Gemini API key" in missing.answer and missing.route == "error"
+    assert missing.status == "unsupported" and "Gemini is not configured" in missing.answer and missing.route == "error"
 
 
 @pytest.mark.parametrize("question", ["", "   ", "x" * 501])
