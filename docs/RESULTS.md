@@ -138,3 +138,11 @@ Exposure is ambiguous for mixed funds, so the tool returns both definitions:
 - Q7 says "for each portfolio", but its reference query leaves out the five portfolios with no technology holdings. Listing them at zero is arguably more correct, so the scorer grades that `equivalent`.
 - Q10's explanation mentions a portfolio ID, while its parameters use a name.
 - The brief's `gemini-pro` model and `google.generativeai` package are obsolete; this project uses `google-genai`.
+
+## Current offline production validation (9 November 2026)
+
+The current checked-out implementation passed `python evaluate.py --local-fallback --min-accuracy 1.0`: all 10 official questions were **exact**, with zero infrastructure errors, zero network attempts, no Gemini client, cache disabled, and demo plans not loaded. Eight used `local_deterministic`; the two sector-exposure questions used `direct_calculator`. Full per-question evidence is in [reports/local_fallback.md](../reports/local_fallback.md).
+
+`python evaluate.py --self-test --extended --min-accuracy 1.0` also passed 40/40 exact. This is **reference-plan replay**, not a production-planner or Gemini evaluation. The production planner has 70 positive/negative paraphrase examples in its test suite. The current test suite has 279 passing tests, including 35 dataset integrity tests; Ruff lint and formatting pass.
+
+No live Gemini run was made for this validation. The deployed Streamlit health endpoint returned HTTP 200 (`ok`) on 9 November 2026. GitHub Actions status was not checked because `gh` is not installed in this environment.

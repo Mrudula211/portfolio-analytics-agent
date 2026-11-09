@@ -15,7 +15,7 @@ Note: Recorded weights and market values disagree by up to 11.2 points; the reco
 
 ## At a glance
 
-- **Original 10, three uncached live attempts:** 25/25 scored answers passed, with 5/30 infrastructure failures. This is not a complete live 10/10: Q4 was unavailable all three times and Q5 twice.
+- **Offline production fallback:** 10/10 exact on 9 November 2026 with no Gemini client, cache, demo plans, or network attempts. See [the local fallback report](reports/local_fallback.md). This is separate from live Gemini accuracy.
 - **Latest 40-question live run:** 16/16 scored answers passed, with 24/40 infrastructure failures (40% end-to-end full credit counting outages as unsuccessful). This is not a complete live 40/40. See [the per-question report](reports/live_extended.md).
 - **Speed:**
   - under 1 ms for repeat questions
@@ -32,7 +32,7 @@ Note: Recorded weights and market values disagree by up to 11.2 points; the reco
 | Command-line agent that chooses a tool | [agent.py](portfolio_agent/agent.py) | `--trace` shows the tool chosen |
 | Evaluator against the ground truth | [evaluate.py](evaluate.py), [evaluation.py](portfolio_agent/evaluation.py) | `python evaluate.py`, or `--self-test` without an API key |
 | Brief documentation and a diagram | This page and [docs/](docs/) | Diagram below |
-| Clean code with error handling | 136 tests, Ruff lint and formatting, CI on every push | `pytest` |
+| Clean code with error handling | 279 tests, Ruff lint and formatting, CI on every push | `pytest` |
 
 **Optional enhancements:**
 - **SQL safety:** parameterised queries, validation before execution and graceful database errors.
@@ -43,13 +43,13 @@ Note: Recorded weights and market values disagree by up to 11.2 points; the reco
 
 ## Run it
 
-Requires Python 3.12 or newer and a [Gemini API key](https://aistudio.google.com/apikey).
+Requires Python 3.12 or newer. Gemini is optional for the supported deterministic intents; set `GEMINI_API_KEY` for broader model-planned questions.
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt
-cp .env.example .env               # then set GEMINI_API_KEY
+export GEMINI_API_KEY=your-key   # optional; PowerShell: $env:GEMINI_API_KEY="your-key"
 # Optional: set DEMO_PASSWORD to protect the Streamlit page with a sign-in form.
 python -m portfolio_agent "How many portfolios do we have in total?"
 ```
@@ -59,12 +59,14 @@ python -m portfolio_agent "How many portfolios do we have in total?"
 | Interactive prompt | `python -m portfolio_agent` |
 | Show SQL, route and timings | add `--trace` |
 | Evaluate: brief's 10, or all 40 | `python evaluate.py`, add `--extended` |
-| Check everything except the model, no key needed | `python evaluate.py --self-test --extended` |
+| Production deterministic fallback, no key/network | `python evaluate.py --local-fallback --min-accuracy 1.0` |
+| Replay reference plans, no key needed (not planner accuracy) | `python evaluate.py --self-test --extended --min-accuracy 1.0` |
 | Web UI | `streamlit run streamlit_app.py`, then open http://localhost:8501 |
 | REST API | `uvicorn portfolio_agent.api:app`, then see http://127.0.0.1:8000/docs |
 | Tests and data audit | `pytest` and `python -m portfolio_agent --check-data` |
 
 The database is built from the CSVs on the first run.
+The local planner supports a bounded set of intents and uses the production SQL guard or exposure calculator. Unsupported requests are clarified/declined or sent to Gemini when configured; it is not general NL-to-SQL. The local evaluation disables Gemini, cache and saved demo plans.
 
 Render serves the Streamlit interface. Configure `GEMINI_API_KEY` in the Render dashboard for model questions; configure `DEMO_PASSWORD` there only if the reviewer should enter a shared password. A configured API key means the client is set up, not that Gemini is reachable or has quota. The REST API is available when run separately and is not the interface served by the Render Docker command.
 
@@ -76,12 +78,15 @@ For portfolio rankings, “strongest” and “best-performing” mean the highe
 
 ```mermaid
 flowchart LR
-    Q[Question] --> C{Exact repeat?}
-    C -- yes --> A[Answer]
-    C -- no --> L[Match names to database values]
-    L --> F{Plain exposure request for one fund?}
-    F -- yes --> E[Exposure calculator]
+    Q[Question] --> C{Valid cache hit?}
+    C -- yes --> A[Cached answer]
+    C -- no --> L[Match names and detect supported intent]
+    L --> F{Supported local intent?}
+    F -- yes --> P[Local deterministic plan]
+    P --> S[SQL guard, then run query]
+    P --> E[Exposure calculator]
     F -- no --> M[Gemini returns a tool plan]
+    M -- unavailable or invalid --> P
     M --> S[SQL guard, then run query]
     M --> E
     M --> D[Decline or ask to clarify]
@@ -95,7 +100,7 @@ flowchart LR
 
 - **One logical planning call per question** returns the whole plan, including both steps of a hybrid question. A repair can add another planning call; hedged model fallbacks can submit up to three provider requests per planning call.
 - **Code writes the answer,** so the model cannot misquote or invent a figure.
-- **Sector exposure for one named fund skips the model.**
+- **Supported requests run without Gemini** through the local deterministic planner; single-fund sector exposure uses the calculator directly. Gemini remains available for intents outside the local planner. See [the fallback assessment](reports/local_fallback_assessment.md).
 - **Hedged requests:** if a model is slow or fails, the next one starts after 2.5 s, and the first answer wins.
 
 How this design was reached through ten Gemini experiments is in [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md).

@@ -145,7 +145,7 @@ def route_label(reply: dict) -> str:
     """Where the answer came from, stated precisely."""
     llm = reply.get("llm") or {}
     if reply["route"] == "cache" and llm.get("prepared_example"):
-        return "Prepared example: a stored Gemini plan, run against the database"
+        return "Cached prepared example: a stored Gemini plan, run against the database"
     label = ROUTES.get(reply["route"], reply["route"])
     if reply["route"] == "local_fallback" and llm.get("fallback_reason"):
         label += f" - {llm['fallback_reason'].replace('_', ' ')}"
