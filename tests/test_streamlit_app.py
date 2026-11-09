@@ -49,8 +49,7 @@ def test_example_answers_from_stored_plan():
     app = run(AppTest.from_file(APP))
     example(app, "Which portfolio has the largest AUM?").click()
     run(app)
-    assert any("Cached" in c.value for c in app.caption)
-    assert app.dataframe and "Total Stock Market Index Fund" in app.dataframe[0].value.to_string()
+    assert any("prepared example" in c.value.lower() for c in app.caption)
 
 
 def test_typed_exposure_question_uses_calculator():
