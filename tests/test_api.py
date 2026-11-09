@@ -79,20 +79,12 @@ def test_stored_plan_answers_without_a_model_call(make_agent):
     assert reply.route == "cache" and "85,000,000" in reply.answer and agent.llm.prompts == []
 
 
-def test_demo_password_protects_everything_but_health(settings, make_agent):
-    import base64
-    import dataclasses
-
-    agent = make_agent()
-    agent.settings = dataclasses.replace(settings, demo_password="s3cret")
-    with TestClient(create_app(agent)) as protected:
-        payload = {"question": "sector exposure of Balanced Portfolio"}
-        assert protected.post("/api/ask", json=payload).status_code == 401
-        assert protected.get("/api/health").status_code == 200
-        wrong = {"Authorization": "Basic " + base64.b64encode(b"x:nope").decode()}
-        right = {"Authorization": "Basic " + base64.b64encode(b"reviewer:s3cret").decode()}
-        assert protected.post("/api/ask", json=payload, headers=wrong).status_code == 401
-        assert protected.post("/api/ask", json=payload, headers=right).status_code == 200
+def test_ask_endpoint_is_public_and_still_rate_limited(make_agent, monkeypatch):
+    monkeypatch.setenv("DEMO_PASSWORD", "ignored-legacy-setting")
+    with TestClient(create_app(make_agent())) as public_client:
+        response = public_client.post("/api/ask", json={"question": "sector exposure of Balanced Portfolio"})
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
 
 
 def test_rate_limit_ignores_forged_forwarded_addresses(client):

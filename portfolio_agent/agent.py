@@ -45,6 +45,17 @@ _NOT_SIMPLE = re.compile(
     re.I,
 )
 _MAX_FANOUT = 20
+_BLOCKED_REQUEST = re.compile(
+    r"\b(?:delete|drop|insert|update|alter|truncate|attach|detach)\b|"
+    r"\bsqlite_(?:master|schema)\b|\b(?:recursive\s+cte|billion\s+rows)\b",
+    re.I,
+)
+_SECRET_REQUEST = re.compile(r"\b(?:api\s+key|system\s+prompt|credentials?|secrets?)\b", re.I)
+_ADVICE_REQUEST = re.compile(
+    r"\b(?:should\s+i\s+(?:buy|sell)|recommend(?:ation)?|predict|forecast|will\s+.+\bprice)\b", re.I
+)
+_UNRELATED_REQUEST = re.compile(r"\bweather\b", re.I)
+_UNAVAILABLE_METRIC = re.compile(r"\bdividend\s+yield\b", re.I)
 _DISCOVERY_TERMS = re.compile(
     r"\b(?:highest|lowest|largest|smallest|biggest|top|max(?:imum)?|min(?:imum)?|all|each|every|passive|active)\b",
     re.I,
@@ -177,6 +188,11 @@ class PortfolioAgent:
                 reply.timings_ms = {"total": round((time.perf_counter() - started) * 1000, 3)}
                 return reply
 
+        policy = self._local_policy_response(question, request_id)
+        if policy is not None:
+            policy.timings_ms = {"total": round((time.perf_counter() - started) * 1000, 3)}
+            return policy
+
         if ambiguous_portfolio_superlative(question):
             return AgentResponse(
                 question,
@@ -214,6 +230,46 @@ class PortfolioAgent:
         return reply
 
     @staticmethod
+    def _local_policy_response(question: str, request_id: str) -> AgentResponse | None:
+        if _BLOCKED_REQUEST.search(question):
+            return AgentResponse(
+                question,
+                STATUS_BLOCKED,
+                "I cannot execute destructive, system-catalog, or resource-exhaustion requests.",
+                "error",
+                request_id,
+            )
+        if _SECRET_REQUEST.search(question):
+            return AgentResponse(
+                question,
+                STATUS_DECLINED,
+                "I can?t provide credentials or hidden system instructions.",
+                "error",
+                request_id,
+            )
+        if _ADVICE_REQUEST.search(question):
+            return AgentResponse(
+                question,
+                STATUS_DECLINED,
+                "I can analyze the sample data, but I can?t give investment advice or predict future prices.",
+                "error",
+                request_id,
+            )
+        if _UNRELATED_REQUEST.search(question):
+            return AgentResponse(
+                question,
+                STATUS_DECLINED,
+                "That request is outside this portfolio analytics application.",
+                "error",
+                request_id,
+            )
+        if _UNAVAILABLE_METRIC.search(question):
+            return AgentResponse(
+                question, STATUS_DECLINED, "Dividend yield is not available in this dataset.", "error", request_id
+            )
+        return None
+
+    @staticmethod
     def _is_simple_exposure(question: str, links: Links) -> bool:
         return (
             len(links.portfolios) == 1
@@ -245,8 +301,8 @@ class PortfolioAgent:
             return AgentResponse(
                 question,
                 STATUS_ERROR,
-                "No Gemini API key is configured, and the local planner does not support this question. "
-                "Sector exposure questions for a named portfolio still work.",
+                "Gemini is not configured, and the deterministic local planner does not support this question. "
+                "Try a supported portfolio, AUM, holdings, sector, or diversification query.",
                 "error",
             )
         if self._gemini_blocked():

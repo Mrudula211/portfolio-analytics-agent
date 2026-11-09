@@ -25,13 +25,13 @@ from .semantics import metric_for_question, sector_threshold
 
 EXPOSURE_INTENT = re.compile(
     r"\b(?:sector\s+(?:exposures?|breakdown|allocations?|weights?|weightings?|mix|split)"
-    r"|exposures?\s+(?:by|across|per)\s+sector)\b",
+    r"|exposures?\s+(?:by|across|per)\s+sector|(?:money|value|holdings?)\s+.*?\bsplit\s+across\s+sectors?)\b",
     re.I,
 )
 
 # Words the intents depend on. Close misspellings of these are corrected before matching.
 _KEYWORDS = (
-    "portfolios portfolio securities holdings sector sectors exposure exposures breakdown average "
+    "portfolios portfolio securities holdings sector sectors exposure exposures breakdown average passively "
     "percentage percent diversification different cost basis market value largest smallest biggest "
     "highest lowest passive active technology managed assets management aum"
 ).split()
@@ -48,18 +48,18 @@ _FILLER = set(
     "what whats is s are the of a an in do does we have has our us how many there total number count all every each "
     "names name list show me which for with and to by please give display on books manage managed under at level "
     "target risk aum assets management average avg mean sum combined overall largest biggest highest greatest "
-    "smallest lowest most least portfolio portfolios fund funds across per".split()
+    "smallest lowest most least portfolio portfolios fund funds across per money track we".split()
 )
 # Extra words each intent legitimately uses, on top of the filler above and the database's own names.
 _INTENT_WORDS = {
-    "exposure": "sector sectors exposure exposures breakdown allocation allocations weights weighting mix split "
+    "exposure": "sector sectors exposure exposures breakdown allocation allocations weights weighting mix split money "
     "calculate",
     "diversification": "diversification metric metrics ratio ratios find holding holdings that their different "
     "distinct sector sectors than more",
     "share": "value worth percentage percent share holdings holding sector sectors that it represents",
     "top": "holdings holding positions position top bottom cost basis market value quantity shares weight current",
     "price": "price prices current share securities security stocks stock sector sectors",
-    "securities": "securities security stocks stock companies company symbols tickers belong belongs sector sectors",
+    "securities": "securities security stocks stock companies company symbols tickers belong belongs sector sectors track we name",
 }
 _PORTFOLIO_WORD = re.compile(r"\b(?:portfolios?|funds?)\b")
 _ALL_WORD = re.compile(r"\b(?:all|every|each)\b")
@@ -146,7 +146,7 @@ class LocalPlanner:
             if len(word) >= 5 and word not in _KEYWORDS:
                 close = get_close_matches(word, _KEYWORDS, n=1, cutoff=0.85)
                 word = close[0] if close else word
-            fixed.append(word)
+            fixed.append("passive" if word == "passively" else word)
         return " ".join(fixed)
 
     def _unexplained(self, text: str, intent: str = "", numbers: bool = False) -> bool:

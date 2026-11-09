@@ -12,7 +12,6 @@ APP = str(ROOT / "streamlit_app.py")
 @pytest.fixture(autouse=True)
 def offline(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "")
-    monkeypatch.setenv("DEMO_PASSWORD", "")
     st.cache_resource.clear()
     st.cache_data.clear()
 
@@ -68,18 +67,12 @@ def test_question_needing_the_model_reports_missing_key():
     app.text_input(key="question_box").set_value("How many bonds are there?")
     next(b for b in app.button if b.label == "Run").click()
     run(app)
-    assert app.error and "No Gemini API key" in app.error[0].value
+    assert app.error and "Gemini is not configured" in app.error[0].value
 
 
-def test_password_gate(monkeypatch):
-    monkeypatch.setenv("DEMO_PASSWORD", "s3cret")
+def test_public_page_opens_without_login_even_with_legacy_password_env(monkeypatch):
+    monkeypatch.setenv("DEMO_PASSWORD", "ignored-legacy-setting")
     app = run(AppTest.from_file(APP))
-    assert not app.sidebar.button  # Nothing behind the gate is rendered.
-    app.text_input[0].set_value("wrong")
-    app.button[0].click()
-    run(app)
-    assert app.error and not app.sidebar.button
-    app.text_input[0].set_value("s3cret")
-    app.button[0].click()
-    run(app)
     assert len(app.sidebar.button) == 6
+    assert [item.label for item in app.text_input] == ["Question"]
+    assert all(item.label != "Password" for item in app.text_input)

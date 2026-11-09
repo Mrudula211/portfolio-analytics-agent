@@ -88,7 +88,7 @@ Colours follow plindia.com, and its Figtree typeface is self-hosted. Text from u
 **The trade-offs:**
 - Streamlit re-runs the script on every interaction. The agent and dataset facts are cached, so a re-run is cheap.
 - Its look can only be adjusted so far.
-- It cannot send HTTP Basic auth challenges, so the demo password is a sign-in form instead.
+- The assessment UI is public and has no application password gate. Abuse protection comes from per-client rate limits and the daily Gemini request cap.
 - The Gemini status says “configured” when a client is constructed; it does not claim the provider is reachable.
 
 ## Stored plans for demo questions
@@ -146,7 +146,7 @@ The response includes `status`, `answer`, `route`, `steps` (SQL, rows, exposures
 
 The container serves the Streamlit app and contains its own database. Its health check is Streamlit's `/_stcore/health`.
 
-- **Render (free):** in the Render dashboard choose **New > Blueprint**, select this repository, and set `GEMINI_API_KEY`. The Blueprint sets `DAILY_MODEL_QUESTIONS` to 300. Set `DEMO_PASSWORD` to show a sign-in form before anything else loads. The free plan sleeps after about 15 idle minutes, so the first visit after a pause takes up to a minute.
+- **Render (free):** in the Render dashboard choose **New > Blueprint**, select this repository, and set `GEMINI_API_KEY`. The Blueprint sets `DAILY_MODEL_QUESTIONS` to 300. The free plan sleeps after about 15 idle minutes, so the first visit after a pause takes up to a minute.
 - **Any container host:** `docker build -t portfolio-agent . && docker run -p 7860:7860 -e GEMINI_API_KEY=... portfolio-agent`
 
 ## Project layout

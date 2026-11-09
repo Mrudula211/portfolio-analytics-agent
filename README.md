@@ -15,6 +15,8 @@ Note: Recorded weights and market values disagree by up to 11.2 points; the reco
 
 ## At a glance
 
+Public app: https://portfolio-analytics-agent.onrender.com/
+
 - **Offline production fallback:** 10/10 exact on 9 November 2026 with no Gemini client, cache, demo plans, or network attempts. See [the local fallback report](reports/local_fallback.md). This is separate from live Gemini accuracy.
 - **Latest 40-question live run:** 16/16 scored answers passed, with 24/40 infrastructure failures (40% end-to-end full credit counting outages as unsuccessful). This is not a complete live 40/40. See [the per-question report](reports/live_extended.md).
 - **Speed:**
@@ -50,7 +52,6 @@ python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt
 export GEMINI_API_KEY=your-key   # optional; PowerShell: $env:GEMINI_API_KEY="your-key"
-# Optional: set DEMO_PASSWORD to protect the Streamlit page with a sign-in form.
 python -m portfolio_agent "How many portfolios do we have in total?"
 ```
 
@@ -68,7 +69,7 @@ python -m portfolio_agent "How many portfolios do we have in total?"
 The database is built from the CSVs on the first run.
 The local planner supports a bounded set of intents and uses the production SQL guard or exposure calculator. Unsupported requests are clarified/declined or sent to Gemini when configured; it is not general NL-to-SQL. The local evaluation disables Gemini, cache and saved demo plans.
 
-Render serves the Streamlit interface. Configure `GEMINI_API_KEY` in the Render dashboard for model questions; configure `DEMO_PASSWORD` there only if the reviewer should enter a shared password. A configured API key means the client is set up, not that Gemini is reachable or has quota. The REST API is available when run separately and is not the interface served by the Render Docker command.
+Render serves the public Streamlit interface without a login gate. Configure `GEMINI_API_KEY` in the Render dashboard for model questions. A configured API key means the client is set up, not that Gemini is reachable or has quota. The REST API is available when run separately and is not the interface served by the Render Docker command.
 
 ## Ranking language
 

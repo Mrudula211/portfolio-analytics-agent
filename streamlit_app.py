@@ -7,7 +7,6 @@ rendered from the agent's structured response: tables, charts and SQL, never mod
 from __future__ import annotations
 
 import re
-import secrets
 from pathlib import Path
 
 import altair as alt
@@ -15,7 +14,6 @@ import pandas as pd
 import streamlit as st
 
 from portfolio_agent.agent import PortfolioAgent
-from portfolio_agent.config import Settings
 from portfolio_agent.db import data_quality_findings
 from portfolio_agent.demo import dataset_summary, load_report, preload_demos
 from portfolio_agent.ratelimit import RateLimiter, proxy_client
@@ -64,21 +62,6 @@ def load_facts(db_path: str) -> tuple[dict, list[str]]:
 def escape(text: str) -> str:
     """Show user and database text literally, never as Markdown."""
     return re.sub(r"([\\`*_{}\[\]()#+\-.!|<>~$])", r"\\\1", str(text))
-
-
-def require_password() -> None:
-    password = Settings.from_env().demo_password
-    if not password or st.session_state.get("signed_in"):
-        return
-    st.markdown("### Portfolio Analytics")
-    with st.form("sign_in", width=360):
-        supplied = st.text_input("Password", type="password")
-        if st.form_submit_button("Sign in", type="primary"):
-            if secrets.compare_digest(supplied.encode(), password.encode()):
-                st.session_state.signed_in = True
-                st.rerun()
-            st.error("That password is not correct.")
-    st.stop()
 
 
 def show_table(columns: list[str], rows: list[list]) -> None:
@@ -218,7 +201,6 @@ def queue(question: str) -> None:
     st.session_state.pending = question
 
 
-require_password()
 agent, examples, limiter = load_agent()
 facts, notes = load_facts(str(agent.settings.db_path))
 
@@ -241,8 +223,9 @@ query_tab, evaluation_tab = st.tabs(["Query", "Evaluation"])
 with query_tab:
     if not agent.llm:
         st.warning(
-            "No Gemini API key is configured. The examples, sector exposures and the questions the local planner "
-            "supports still work."
+            "Gemini is not configured. The local planner supports portfolio counts and lists, AUM, security and "
+            "sector summaries, holdings rankings, diversification, sector value shares and sector exposure. "
+            "Other questions may need Gemini or be declined. Local answers do not use Gemini quota."
         )
     with st.form("ask", border=False):
         left, right = st.columns([8, 1], vertical_alignment="bottom")
