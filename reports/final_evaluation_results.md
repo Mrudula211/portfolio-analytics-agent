@@ -29,7 +29,7 @@ The 40-question run recorded on 8 November 2026 scored 16 answers: **15 exact an
 
 ## Generalization and quality checks
 
-The production planner is exercised by 45 SQL paraphrase cases, 7 exposure cases, 4 hybrid cases and 14 negative cases (70 question examples), plus ambiguity/unknown-entity and safety checks. The historical test baseline was 124 passed; the latest verified result is 281 passed, including 35 dataset integrity tests. Ruff check/format pass. CI: run for commit `a255ecda` passed ([run details](https://github.com/Mrudula211/portfolio-analytics-agent/actions/runs/42555331261)).
+The production planner is exercised by 58 SQL paraphrase cases, 7 exposure cases, 5 hybrid cases and 22 negative cases (92 question examples), plus ambiguity/unknown-entity and safety checks. The historical test baseline was 124 passed; the latest verified result is 303 passed, including 35 dataset integrity tests. Ruff check/format pass. CI: run for commit `a255ecda` passed ([run details](https://github.com/Mrudula211/portfolio-analytics-agent/actions/runs/42555331261)).
 
 ## Deployment verification
 
@@ -40,6 +40,6 @@ The production planner is exercised by 45 SQL paraphrase cases, 7 exposure cases
 
 ## Extended production-agent fallback (no Gemini)
 
-`python evaluate.py --local-fallback --extended` scored 29/40 exact and 11/40 fail (no infrastructure errors, 0 network attempts). The 11 unsupported cases are x02, x03, x05-x12, and x20. They request passive fund filters/AUM paraphrased as money, NAV/performance/risk history, historical prices, transactions, bond coupons/values, NVDA holdings, or a latest-beta hybrid. x21-x29 were blocked or declined with exact expected policy outcomes; x30 was clarified correctly. These are intentionally not represented as broad deterministic support. Report: `reports/local_fallback_extended.md`.
+`python evaluate.py --local-fallback --extended --min-accuracy 1.0` scored 40/40 exact (no infrastructure errors, 0 network attempts). An earlier run scored 29/40; x02, x03, x05-x12 and x20 passed after generic planner intents were added, so this set is not a blind test. x21-x29 were blocked or declined with exact expected policy outcomes; x30 was clarified correctly. Coverage remains bounded to the planner's intents. Report: `reports/local_fallback_extended.md`.
 
-The 40/40 extended self-test above remains reference-plan replay and must not be conflated with the 29/40 production fallback result. Gemini may handle unsupported local questions when configured, subject to provider availability, quota, and successful execution; the 11 unsupported local cases are not evidence that Gemini answered them.
+The 40/40 extended self-test above is reference-plan replay and is a separate check from the 40/40 production fallback result. Gemini may handle questions outside the local planner when configured, subject to provider availability, quota, and successful execution.

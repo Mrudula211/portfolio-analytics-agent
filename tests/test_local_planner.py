@@ -90,6 +90,27 @@ def diversification_oracle(threshold):
     )
 
 
+def portfolio_id(name):
+    return f"(SELECT portfolio_id FROM portfolios WHERE portfolio_name = '{name}')"
+
+
+def latest_oracle(table, date_column, column, name):
+    owner = portfolio_id(name)
+    return (
+        f"SELECT {column} FROM {table} WHERE portfolio_id = {owner} "
+        f"AND {date_column} = (SELECT MAX({date_column}) FROM {table} WHERE portfolio_id = {owner})"
+    )
+
+
+def ranked_oracle(table, date_column, column, aggregate):
+    newest = f"(SELECT MAX({date_column}) FROM {table})"
+    return (
+        "SELECT portfolio_name FROM portfolios WHERE portfolio_id = "
+        f"(SELECT portfolio_id FROM {table} WHERE {date_column} = {newest} AND {column} = "
+        f"(SELECT {aggregate}({column}) FROM {table} WHERE {date_column} = {newest}))"
+    )
+
+
 AVG_BY_SECTOR = (
     "SELECT sec.sector_name, AVG(s.current_price) FROM sectors sec JOIN securities s USING (sector_id) "
     "GROUP BY sec.sector_id"
@@ -198,6 +219,57 @@ SQL_CASES = [
         diversification_oracle(4),
     ),
     ("diversification metrics for portfolios in more than 3 sectors", diversification_oracle(3)),
+    # Wording around status and money under management
+    ("Which portfolios are run passively?", NAMES + where("status = 'Passive'")),
+    (
+        "How much money is managed in total across high risk portfolios?",
+        AUM.format(agg="SUM") + where("target_risk_level = 'High'"),
+    ),
+    # Measures recorded over time
+    (
+        "Latest net asset value of the Growth Equity Fund",
+        latest_oracle("portfolio_performance", "performance_date", "nav", "Growth Equity Fund"),
+    ),
+    (
+        "most recent volatility for the Balanced Portfolio",
+        latest_oracle("portfolio_performance", "performance_date", "volatility", "Balanced Portfolio"),
+    ),
+    ("Which fund has the lowest latest beta?", ranked_oracle("risk_metrics", "calculation_date", "beta", "MIN")),
+    (
+        "Which portfolio has the highest sortino ratio on the latest date?",
+        ranked_oracle("risk_metrics", "calculation_date", "sortino_ratio", "MAX"),
+    ),
+    (
+        "Show every portfolio's latest 99% VaR",
+        "SELECT p.portfolio_name, r.var_99 FROM portfolios p, risk_metrics r WHERE p.portfolio_id = r.portfolio_id "
+        "AND r.calculation_date = (SELECT MAX(calculation_date) FROM risk_metrics)",
+    ),
+    # A security's price on one day
+    (
+        "What was MSFT's opening price on 2023-10-03?",
+        "SELECT open_price FROM historical_prices WHERE price_date = '2023-10-03' "
+        "AND security_id = (SELECT security_id FROM securities WHERE symbol = 'MSFT')",
+    ),
+    # Transactions
+    ("How many BUY transactions do we have?", "SELECT COUNT(*) FROM transactions WHERE transaction_type = 'BUY'"),
+    ("Count the transactions", "SELECT COUNT(*) FROM transactions"),
+    # Bonds and asset classes
+    (
+        "Show bonds with a coupon below 2.5 percent",
+        "SELECT symbol, coupon_rate FROM securities WHERE coupon_rate < 2.5 AND asset_type = 'Bond'",
+    ),
+    (
+        "What is the total market value of stock holdings in the Conservative Income Fund?",
+        "SELECT SUM(h.quantity * (SELECT current_price FROM securities x WHERE x.security_id = h.security_id)) "
+        f"FROM holdings h WHERE h.portfolio_id = {portfolio_id('Conservative Income Fund')} "
+        "AND h.security_id IN (SELECT security_id FROM securities WHERE asset_type = 'Stock')",
+    ),
+    # Which portfolios hold one security
+    (
+        "Which funds own AAPL?",
+        "SELECT portfolio_name FROM portfolios WHERE portfolio_id IN (SELECT portfolio_id FROM holdings "
+        "WHERE security_id = (SELECT security_id FROM securities WHERE symbol = 'AAPL'))",
+    ),
 ]
 
 
@@ -234,6 +306,10 @@ HYBRID_CASES = [
     (
         "sector exposure of the smallest portfolio by assets",
         "SELECT portfolio_name FROM portfolios WHERE total_aum = (SELECT MIN(total_aum) FROM portfolios)",
+    ),
+    (
+        "Find the fund with the lowest latest volatility and show its sector exposure",
+        ranked_oracle("portfolio_performance", "performance_date", "volatility", "MIN"),
     ),
 ]
 
@@ -288,6 +364,14 @@ UNSUPPORTED = [
     "What's the weather in Mumbai?",
     "Which securities are in the Utilities sector and pay a dividend?",
     "What is the sector exposure for Technology in the Balanced Portfolio?",  # A specific sector, not a breakdown.
+    "What is the latest VaR of the Balanced Portfolio?",  # The data has 95% and 99%; neither was asked for.
+    "Latest NAV",  # No portfolio named.
+    "Which portfolio has the highest latest Sharpe and beta?",  # Two measures cannot share one ranking.
+    "What was Apple's price on 2023-10-02?",  # Open, high, low or close was not stated.
+    "What was the closing price of AAPL last week?",  # No exact date.
+    "List bonds with a high coupon",  # No threshold.
+    "How many SELL transactions were made by John?",
+    "Which portfolios hold NVDA and AAPL?",  # Two securities: all of them, or either?
 ]
 
 

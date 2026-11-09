@@ -31,3 +31,7 @@ At task start, the local `main` and `origin/main` both pointed to `34c873a040244
 ## Verdict
 
 **READY WITH DOCUMENTED LIMITATIONS** for the official Gemini-independent acceptance: Q1–Q10 pass exactly in production offline mode. Owner-confirmed deployment status: the Render app is public, works in an incognito window, and has no application login requirement. Recorded source and Render health checks are separate evidence; exact deployed-commit parity has not been independently established. The latest recorded live Gemini evaluation scored 16 answers (15 exact, 1 equivalent) and had 24 infrastructure errors; see `reports/live_extended.md`.
+
+## Update after this audit
+
+Generic planner intents were added after this audit. The extended production fallback now scores 40/40 exact and the full suite has 303 passing tests. The figures above record the state at the time of the audit. The extended set is not a blind test, because the intents were added after seeing its failures.

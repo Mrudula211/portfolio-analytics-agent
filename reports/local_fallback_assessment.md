@@ -2,9 +2,9 @@
 
 ## Architecture
 
-`PortfolioAgent` routes supported, bounded intents through `portfolio_agent/local_planner.py`; the planner produces ordinary tool calls. SQL passes through the same SQL guard and read-only executor as model plans. Exposure requests use the production `exposure_calculator`. Supported intents include portfolio counts and lists, AUM aggregations/rankings, sector security lists and average prices, top/bottom holdings, sector value shares, diversification, sector exposure, and supported hybrid select-then-exposure requests. Unsupported/ambiguous requests decline or ask for clarification; this is a bounded intent planner, not general natural-language SQL.
+`PortfolioAgent` routes supported, bounded intents through `portfolio_agent/local_planner.py`; the planner produces ordinary tool calls. SQL passes through the same SQL guard and read-only executor as model plans. Exposure requests use the production `exposure_calculator`. Supported intents include portfolio counts and lists, AUM aggregations/rankings, sector security lists and average prices, top/bottom holdings, sector value shares, diversification, sector exposure, supported hybrid select-then-exposure requests, latest recorded performance and risk measures, one-day security prices, transaction counts, bond coupon filters, asset-class market value and portfolios holding a security. Unsupported/ambiguous requests decline or ask for clarification; this is a bounded intent planner, not general natural-language SQL.
 
-When configured, Gemini may handle requests outside local coverage, subject to provider availability, quota, and successful execution. Gemini failure/invalid-plan handling can fall back for supported intents. Client status distinguishes configured, successful, unavailable, quota exhausted, and unconfigured. Route source appears in the UI. The 11 unsupported cases in the extended offline evaluation are not evidence that Gemini answered them.
+When configured, Gemini may handle requests outside local coverage, subject to provider availability, quota, and successful execution. Gemini failure/invalid-plan handling can fall back for supported intents. Client status distinguishes configured, successful, unavailable, quota exhausted, and unconfigured. Route source appears in the UI.
 
 ## Verified production evaluation
 
@@ -20,4 +20,4 @@ Detailed per-question evidence: `reports/local_fallback.md`.
 
 ## Generalization limits and evidence
 
-Production planner tests contain 45 SQL paraphrase cases, 7 exposure variants, 4 hybrid variants and 14 unsupported/negative cases: 70 distinct question examples, plus ambiguity and unknown-entity tests. These tests use the production agent/tools and independent SQL/CSV oracles; see `tests/test_local_planner.py`. The separate extended 40-case self-test is reference-plan replay and is not evidence of planner accuracy.
+Production planner tests contain 58 SQL paraphrase cases, 7 exposure variants, 5 hybrid variants and 22 unsupported/negative cases: 92 distinct question examples, plus ambiguity and unknown-entity tests. These tests use the production agent/tools and independent SQL/CSV oracles; see `tests/test_local_planner.py`. The separate extended 40-case self-test is reference-plan replay and is not evidence of planner accuracy.

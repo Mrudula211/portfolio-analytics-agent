@@ -48,7 +48,7 @@ _FILLER = set(
     "what whats is s are the of a an in do does we have has our us how many there total number count all every each "
     "names name list show me which for with and to by please give display on books manage managed under at level "
     "target risk aum assets management average avg mean sum combined overall largest biggest highest greatest "
-    "smallest lowest most least portfolio portfolios fund funds across per money track we".split()
+    "smallest lowest most least portfolio portfolios fund funds across per money track we much run".split()
 )
 # Extra words each intent legitimately uses, on top of the filler above and the database's own names.
 _INTENT_WORDS = {
@@ -62,11 +62,50 @@ _INTENT_WORDS = {
     "securities": (
         "securities security stocks stock companies company symbols tickers belong belongs sector sectors track we name"
     ),
+    "recorded": "latest most recent newest date available on had with net asset value nav sharpe ratio volatility "
+    "maximum max drawdown sortino beta cvar var tracking error information find its calculate sector exposure "
+    "exposures %",
+    "day_price": "was closing close opening open high low price on date",
+    "transactions": "transaction transactions trades trade buy sell there made",
+    "coupon": "bond bonds coupon coupons rate rates above over greater more than higher below under less lower "
+    "percent %",
+    "asset_value": "market value worth bond bonds stock stocks holding holdings position positions",
+    "holders": "hold holds holding holdings own owns contain contains",
 }
 _PORTFOLIO_WORD = re.compile(r"\b(?:portfolios?|funds?)\b")
 _ALL_WORD = re.compile(r"\b(?:all|every|each)\b")
 _SUPERLATIVE = re.compile(r"\b(?:largest|biggest|highest|greatest|most|smallest|lowest|least)\b")
 _DESCENDING = re.compile(r"\b(?:largest|biggest|highest|greatest|most|top)\b")
+_RECENT = re.compile(r"\b(?:latest|most recent|newest)\b")
+_HIGHEST = re.compile(r"\b(?:highest|largest|biggest|greatest)\b")
+_LOWEST = re.compile(r"\b(?:lowest|smallest)\b")
+_ISO_DATE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
+_COUPON_LIMIT = re.compile(
+    r"\b(above|over|greater than|more than|higher than|below|under|less than|lower than)\s+(\d+(?:\.\d+)?)\b"
+)
+_PERFORMANCE = ("portfolio_performance", "performance_date")
+_RISK = ("risk_metrics", "calculation_date")
+# Measures recorded per portfolio over time: wording, then table, date column and value column.
+# A bare "VaR" is left out on purpose, because the data holds both a 95% and a 99% figure.
+_RECORDED_METRICS = (
+    (r"\bnav\b|\bnet assets? value\b", *_PERFORMANCE, "nav"),
+    (r"\bsharpe\b", *_PERFORMANCE, "sharpe_ratio"),
+    (r"\bvolatility\b", *_PERFORMANCE, "volatility"),
+    (r"\bdrawdown\b", *_PERFORMANCE, "max_drawdown"),
+    (r"\bsortino\b", *_RISK, "sortino_ratio"),
+    (r"\bbeta\b", *_RISK, "beta"),
+    (r"\bcvar\b", *_RISK, "cvar_95"),
+    (r"\b99 % var\b|\bvar 99\b", *_RISK, "var_99"),
+    (r"\b95 % var\b|\bvar 95\b", *_RISK, "var_95"),
+    (r"\btracking error\b", *_RISK, "tracking_error"),
+    (r"\binformation ratio\b", *_RISK, "information_ratio"),
+)
+_PRICE_COLUMNS = (
+    (r"\bclos(?:e|ing) price\b", "close_price"),
+    (r"\bopen(?:ing)? price\b", "open_price"),
+    (r"\bhigh price\b", "high_price"),
+    (r"\blow price\b", "low_price"),
+)
 
 
 def _literal(value: str) -> str:
@@ -87,6 +126,12 @@ class Vocabulary:
                 r[0]
                 for r in conn.execute(
                     "SELECT DISTINCT target_risk_level FROM portfolios WHERE target_risk_level IS NOT NULL"
+                )
+            ]
+            self.transaction_types = [
+                r[0]
+                for r in conn.execute(
+                    "SELECT DISTINCT transaction_type FROM transactions WHERE transaction_type IS NOT NULL"
                 )
             ]
             self.sector_group = {r[0]: r[1] for r in conn.execute("SELECT sector_name, industry_group FROM sectors")}
@@ -123,12 +168,19 @@ class LocalPlanner:
         """Tool calls for a supported intent, or None when the wording is not supported."""
         text = self._normalise(question)
         for intent in (
+            self._ranked_metric_then_exposure,
             self._exposure,
             self._diversification,
             self._sector_share,
             self._top_holdings,
             self._average_price_by_sector,
             self._securities_in_sector,
+            self._recorded_metric,
+            self._day_price,
+            self._transaction_count,
+            self._bonds_by_coupon,
+            self._asset_value_in_portfolio,
+            self._portfolios_holding,
             self._aum,
             self._count_portfolios,
             self._list_portfolios,
@@ -336,7 +388,7 @@ class LocalPlanner:
         return self._call(sql, f"Securities in {links.sectors[0]}")
 
     def _aum(self, question: str, text: str, links: Links) -> list[ToolCall] | None:
-        if not re.search(r"\b(?:aum|assets under management)\b", text):
+        if not re.search(r"\b(?:aum|assets under management|money\b.*\bmanaged)\b", text):
             return None
         if links.portfolios or links.sectors or links.securities or _OTHER_TOPICS.search(text):
             return None
@@ -353,6 +405,142 @@ class LocalPlanner:
         if re.search(r"\b(?:total|sum|combined|overall)\b", text) or filters:
             return self._call(f"SELECT SUM(total_aum) FROM portfolios{where}", "Total AUM")
         return None
+
+    @staticmethod
+    def _metric(text: str) -> tuple[str, str, str] | None:
+        """The table, date column and value column of the single recorded measure a question names."""
+        found = [metric[1:] for metric in _RECORDED_METRICS if re.search(metric[0], text)]
+        return found[0] if len(found) == 1 else None
+
+    @staticmethod
+    def _rank_direction(text: str) -> str | None:
+        high, low = bool(_HIGHEST.search(text)), bool(_LOWEST.search(text))
+        return None if high == low else ("DESC" if high else "ASC")
+
+    def _ranked_on_latest_date(self, text: str) -> str | None:
+        """SQL naming the portfolio that ranks first on the newest date of a recorded measure."""
+        metric = self._metric(text)
+        direction = self._rank_direction(text)
+        if metric is None or direction is None or not _RECENT.search(text) or not _PORTFOLIO_WORD.search(text):
+            return None
+        table, date_column, column = metric
+        return (
+            f"SELECT p.portfolio_name FROM {table} m JOIN portfolios p ON p.portfolio_id = m.portfolio_id "
+            f"WHERE m.{date_column} = (SELECT MAX({date_column}) FROM {table}) ORDER BY m.{column} {direction} LIMIT 1"
+        )
+
+    def _ranked_metric_then_exposure(self, question: str, text: str, links: Links) -> list[ToolCall] | None:
+        if not EXPOSURE_INTENT.search(question) or links.portfolios or links.sectors or links.securities:
+            return None
+        sql = self._ranked_on_latest_date(text)
+        if sql is None or self._unexplained(text, "recorded", numbers=True):
+            return None
+        return self._call(sql, "Selected portfolio") + [
+            ToolCall("exposure_calculator", {"portfolio_names": [], "use_previous_sql_result": True})
+        ]
+
+    def _recorded_metric(self, question: str, text: str, links: Links) -> list[ToolCall] | None:
+        metric = self._metric(text)
+        if metric is None or not _RECENT.search(text) or links.sectors or links.securities:
+            return None
+        if self._unexplained(text, "recorded", numbers=True):
+            return None
+        table, date_column, column = metric
+        if len(links.portfolios) == 1:
+            sql = (
+                f"SELECT m.{column} FROM {table} m JOIN portfolios p ON p.portfolio_id = m.portfolio_id "
+                f"WHERE p.portfolio_name = {_literal(links.portfolios[0])} ORDER BY m.{date_column} DESC LIMIT 1"
+            )
+            return self._call(sql, f"Latest {column} of {links.portfolios[0]}")
+        if links.portfolios or links.candidates:
+            return None
+        ranked = self._ranked_on_latest_date(text)
+        if ranked:
+            return self._call(ranked, f"Portfolio ranked by latest {column}")
+        if not (_ALL_WORD.search(text) and _PORTFOLIO_WORD.search(text)):
+            return None
+        sql = (
+            f"SELECT p.portfolio_name, m.{column} FROM {table} m JOIN portfolios p ON p.portfolio_id = m.portfolio_id "
+            f"WHERE m.{date_column} = (SELECT MAX(x.{date_column}) FROM {table} x "
+            "WHERE x.portfolio_id = m.portfolio_id) "
+            "ORDER BY p.portfolio_name"
+        )
+        return self._call(sql, f"Latest {column} by portfolio")
+
+    def _day_price(self, question: str, text: str, links: Links) -> list[ToolCall] | None:
+        day = _ISO_DATE.search(question)
+        column = next((c for pattern, c in _PRICE_COLUMNS if re.search(pattern, text)), None)
+        if day is None or column is None or len(links.securities) != 1 or links.portfolios or links.sectors:
+            return None
+        if self._unexplained(text, "day_price", numbers=True):
+            return None
+        symbol = links.securities[0].split()[0]
+        sql = (
+            f"SELECT hp.{column} FROM historical_prices hp JOIN securities s ON s.security_id = hp.security_id "
+            f"WHERE s.symbol = {_literal(symbol)} AND hp.price_date = {_literal(day.group(1))}"
+        )
+        return self._call(sql, f"{symbol} {column} on the requested date")
+
+    def _transaction_count(self, question: str, text: str, links: Links) -> list[ToolCall] | None:
+        if not re.search(r"\b(?:transactions?|trades?)\b", text):
+            return None
+        if not re.search(r"\b(?:how many|number of|count)\b", text):
+            return None
+        if links.portfolios or links.sectors or links.securities or self._unexplained(text, "transactions"):
+            return None
+        kinds = [v for v in self.vocabulary.transaction_types if re.search(rf"\b{re.escape(v.lower())}\b", text)]
+        if len(kinds) > 1:
+            return None
+        where = f" WHERE transaction_type = {_literal(kinds[0])}" if kinds else ""
+        return self._call(f"SELECT COUNT(*) FROM transactions{where}", "Number of transactions")
+
+    def _bonds_by_coupon(self, question: str, text: str, links: Links) -> list[ToolCall] | None:
+        if not re.search(r"\bbonds?\b", text) or not re.search(r"\bcoupons?\b", text):
+            return None
+        limit = _COUPON_LIMIT.search(" ".join(question.lower().split()))
+        if limit is None or links.portfolios or links.sectors or links.securities:
+            return None
+        if self._unexplained(text, "coupon", numbers=True):
+            return None
+        operator = "<" if limit.group(1) in {"below", "under", "less than", "lower than"} else ">"
+        sql = (
+            "SELECT symbol, coupon_rate FROM securities "
+            f"WHERE asset_type = 'Bond' AND coupon_rate {operator} {float(limit.group(2)):g}"
+        )
+        return self._call(sql, "Bonds by coupon rate")
+
+    def _asset_value_in_portfolio(self, question: str, text: str, links: Links) -> list[ToolCall] | None:
+        asset = re.search(r"\b(bond|stock)s? (?:holdings?|positions?)\b", text)
+        if asset is None or not re.search(r"\bmarket value\b", text):
+            return None
+        if not re.search(r"\b(?:total|sum|combined)\b", text):
+            return None
+        if len(links.portfolios) != 1 or links.sectors or links.securities or self._unexplained(text, "asset_value"):
+            return None
+        sql = (
+            "SELECT SUM(h.quantity * s.current_price) FROM holdings h "
+            "JOIN securities s ON s.security_id = h.security_id "
+            "JOIN portfolios p ON p.portfolio_id = h.portfolio_id "
+            f"WHERE p.portfolio_name = {_literal(links.portfolios[0])} "
+            f"AND s.asset_type = {_literal(asset.group(1).capitalize())}"
+        )
+        return self._call(sql, f"Market value of {asset.group(1)} holdings in {links.portfolios[0]}")
+
+    def _portfolios_holding(self, question: str, text: str, links: Links) -> list[ToolCall] | None:
+        if len(links.securities) != 1 or links.portfolios or links.sectors or not _PORTFOLIO_WORD.search(text):
+            return None
+        if not re.search(r"\b(?:hold|holds|holding|holdings|own|owns|contain|contains)\b", text):
+            return None
+        if not re.search(r"\b(?:which|what|list|show|name|names|display)\b", text):
+            return None
+        if re.search(r"\b(?:how many|count)\b", text) or self._unexplained(text, "holders"):
+            return None
+        symbol = links.securities[0].split()[0]
+        sql = (
+            "SELECT p.portfolio_name FROM holdings h JOIN portfolios p ON p.portfolio_id = h.portfolio_id "
+            f"JOIN securities s ON s.security_id = h.security_id WHERE s.symbol = {_literal(symbol)}"
+        )
+        return self._call(sql, f"Portfolios holding {symbol}")
 
     def _count_portfolios(self, question: str, text: str, links: Links) -> list[ToolCall] | None:
         if not re.search(r"\b(?:how many|number of|count)\b", text) or not _PORTFOLIO_WORD.search(text):

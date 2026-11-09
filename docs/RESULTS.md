@@ -93,7 +93,7 @@ Every question that was scored more than once got the same verdict each time. Q5
 
 The self-test proves the tools, the SQL guard and the scorer work together. It says nothing about the model's accuracy. Timings were taken in process on a Windows laptop and exclude network time.
 
-The 124-test count is an earlier historical result, not the latest suite count. The latest documented test suite passed 281 tests; see the 9 November validation below.
+The 124-test count is an earlier historical result, not the latest suite count. The latest test suite passed 303 tests; see the 9 November validation below.
 
 ### Earlier configuration
 
@@ -145,11 +145,11 @@ Exposure is ambiguous for mixed funds, so the tool returns both definitions:
 
 The current checked-out implementation passed `python evaluate.py --local-fallback --min-accuracy 1.0`: all 10 official questions were **exact**, with zero infrastructure errors, zero network attempts, no Gemini client, cache disabled, and demo plans not loaded. Eight used `local_deterministic`; the two sector-exposure questions used `direct_calculator`. Full per-question evidence is in [reports/local_fallback.md](../reports/local_fallback.md).
 
-`python evaluate.py --self-test --extended --min-accuracy 1.0` also passed 40/40 exact. This is **reference-plan replay**, not a production-planner or Gemini evaluation. The production planner has 70 positive/negative paraphrase examples in its test suite. The current test suite has 281 passing tests, including 35 dataset integrity tests; Ruff lint and formatting pass.
+`python evaluate.py --self-test --extended --min-accuracy 1.0` also passed 40/40 exact. This is **reference-plan replay**, not a production-planner or Gemini evaluation. The production planner has 92 positive/negative paraphrase examples in its test suite. The current test suite has 303 passing tests, including 35 dataset integrity tests; Ruff lint and formatting pass.
 
 No live Gemini run was made for this validation. The deployed Streamlit health endpoint returned HTTP 200 (`ok`) on 9 November 2026. GitHub Actions run for `a255ecda` passed ([workflow run](https://github.com/Mrudula211/portfolio-analytics-agent/actions/runs/42555331261)).
 
 
 ### Extended production fallback coverage
 
-The real production agent was also run on all 40 official plus extended cases without Gemini: **29 exact, 11 unsupported/fail, 0 infrastructure errors, 0 network attempts**. The unsupported cases are x02, x03, x05-x12 and x20, which ask for unsupported filters, time-series/risk/transaction/bond/NVDA queries or a beta-to-exposure hybrid. Safety and out-of-scope refusals x21-x29 and the ambiguous x30 were handled correctly. See [the per-case report](../reports/local_fallback_extended.md). The 40/40 reference-plan self-test does not measure planner coverage.
+The real production agent was also run on all 40 official plus extended cases without Gemini: **40 exact, 0 infrastructure errors, 0 network attempts**. The first run scored 29 of 40. Generic planner intents were then added for recorded performance and risk measures, one-day security prices, transaction counts, bond coupon filters, asset-class market value and portfolios holding a security, with their parameters validated against the database. This set is therefore not a blind test. The new intents are also covered by differently worded questions and by negative cases checked against independent SQL. Safety and out-of-scope refusals x21-x29 and the ambiguous x30 were handled correctly. See [the per-case report](../reports/local_fallback_extended.md). The 40/40 reference-plan self-test is a separate check and does not measure planner coverage.
