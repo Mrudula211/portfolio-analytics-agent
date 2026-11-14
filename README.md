@@ -15,7 +15,7 @@ Note: Recorded weights and market values disagree by up to 11.2 points; the reco
 
 ## At a glance
 
-Public app: [portfolio-analytics-agent.onrender.com](https://portfolio-analytics-agent.onrender.com/). The owner confirmed that the Render deployment is public, opens in an incognito window, and requires no application login. Source-code and Render health checks are documented separately in [the final evaluation report](reports/final_evaluation_results.md); the exact deployed commit has not been independently matched to this checkout.
+Public app: [portfolio-analytics-agent.onrender.com](https://portfolio-analytics-agent.onrender.com/). Source-code and Render health checks are documented separately in [the final evaluation report](reports/final_evaluation_results.md); the exact deployed commit has not been independently matched to this checkout.
 
 - **Offline production fallback:** 10/10 exact on the official questions and 40/40 exact on the official plus extended set, with no Gemini client, cache, demo plans, or network attempts. See [the local fallback report](reports/local_fallback.md) and [the extended report](reports/local_fallback_extended.md). This is separate from live Gemini accuracy, and the extended set is not a blind test because planner intents were added after seeing its failures.
 - **Latest recorded 40-question live Gemini run (8 November 2026):** 16/16 scored answers passed (15 exact, 1 equivalent); 24/40 attempts were infrastructure errors. This is not a complete live 40/40. See [the per-question report](reports/live_extended.md).
