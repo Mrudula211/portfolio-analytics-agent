@@ -31,16 +31,16 @@
 
 | ID | Verdict | Route | ms | Question | Detail |
 | --- | --- | --- | --- | --- | --- |
-| gt01 | infra_error | model | 12008.6 | How many portfolios do we have in total? | model unreachable |
-| gt02 | exact | model | 3318.3 | What are the names of all active portfolios? |  |
-| gt03 | exact | model | 3936.1 | Which securities are in the Technology sector? |  |
-| gt04 | exact | model | 6003.2 | What is the total Assets Under Management (AUM) for portfolios with high target risk level? |  |
-| gt05 | exact | model | 4342.1 | Show me the top 5 holdings by cost basis in the Growth Equity Fund |  |
-| gt06 | exact | model | 11176.3 | What is the average current price of securities in each sector? |  |
-| gt07 | infra_error | model | 12029.4 | For each portfolio, show the total value of Technology sector holdings and what percentage it represents of the total portfolio value | model unreachable |
-| gt08 | infra_error | model | 12022.6 | Find portfolios that have holdings in more than 5 different sectors and show their diversification metrics | model unreachable |
-| gt09 | exact | fast_path | 13.2 | What are the sector exposures for the Tech Innovation Fund? |  |
-| gt10 | exact | fast_path | 13.4 | Calculate the sector exposure breakdown for international equity |  |
+| gt01 | infra_error | model | 12008.6 | [assessment question Q1] | model unreachable |
+| gt02 | exact | model | 3318.3 | [assessment question Q2] |  |
+| gt03 | exact | model | 3936.1 | [assessment question Q3] |  |
+| gt04 | exact | model | 6003.2 | [assessment question Q4] |  |
+| gt05 | exact | model | 4342.1 | [assessment question Q5] |  |
+| gt06 | exact | model | 11176.3 | [assessment question Q6] |  |
+| gt07 | infra_error | model | 12029.4 | [assessment question Q7] | model unreachable |
+| gt08 | infra_error | model | 12022.6 | [assessment question Q8] | model unreachable |
+| gt09 | exact | fast_path | 13.2 | [assessment question Q9] |  |
+| gt10 | exact | fast_path | 13.4 | [assessment question Q10] |  |
 | x01 | exact | model | 2631.3 | What's the number of funds on our books? |  |
 | x02 | exact | model | 11600.3 | Which funds are run passively? |  |
 | x03 | exact | model | 4776.5 | How much money in total is managed across low risk funds? |  |

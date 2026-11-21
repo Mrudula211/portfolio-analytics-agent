@@ -41,16 +41,16 @@
 
 | ID | Verdict | Route | ms | Question | Detail |
 | --- | --- | --- | --- | --- | --- |
-| gt01 | exact | local_deterministic | 5.0 | How many portfolios do we have in total? |  |
-| gt02 | exact | local_deterministic | 3.3 | What are the names of all active portfolios? |  |
-| gt03 | exact | local_deterministic | 3.2 | Which securities are in the Technology sector? |  |
-| gt04 | exact | local_deterministic | 6.4 | What is the total Assets Under Management (AUM) for portfolios with high target risk level? |  |
-| gt05 | exact | local_deterministic | 4.9 | Show me the top 5 holdings by cost basis in the Growth Equity Fund |  |
-| gt06 | exact | local_deterministic | 4.8 | What is the average current price of securities in each sector? |  |
-| gt07 | exact | local_deterministic | 9.6 | For each portfolio, show the total value of Technology sector holdings and what percentage it represents of the total portfolio value |  |
-| gt08 | exact | local_deterministic | 8.0 | Find portfolios that have holdings in more than 5 different sectors and show their diversification metrics |  |
-| gt09 | exact | direct_calculator | 4.7 | What are the sector exposures for the Tech Innovation Fund? |  |
-| gt10 | exact | direct_calculator | 4.9 | Calculate the sector exposure breakdown for international equity |  |
+| gt01 | exact | local_deterministic | 5.0 | [assessment question Q1] |  |
+| gt02 | exact | local_deterministic | 3.3 | [assessment question Q2] |  |
+| gt03 | exact | local_deterministic | 3.2 | [assessment question Q3] |  |
+| gt04 | exact | local_deterministic | 6.4 | [assessment question Q4] |  |
+| gt05 | exact | local_deterministic | 4.9 | [assessment question Q5] |  |
+| gt06 | exact | local_deterministic | 4.8 | [assessment question Q6] |  |
+| gt07 | exact | local_deterministic | 9.6 | [assessment question Q7] |  |
+| gt08 | exact | local_deterministic | 8.0 | [assessment question Q8] |  |
+| gt09 | exact | direct_calculator | 4.7 | [assessment question Q9] |  |
+| gt10 | exact | direct_calculator | 4.9 | [assessment question Q10] |  |
 | x01 | exact | local_deterministic | 3.0 | What's the number of funds on our books? |  |
 | x02 | exact | local_deterministic | 1.7 | Which funds are run passively? |  |
 | x03 | exact | local_deterministic | 4.1 | How much money in total is managed across low risk funds? |  |

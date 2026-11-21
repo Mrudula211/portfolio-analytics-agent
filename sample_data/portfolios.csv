@@ -1,0 +1,14 @@
+portfolio_id,portfolio_name,creation_date,target_risk_level,total_aum,strategy_type,benchmark_index,status
+1,Harbor Growth Fund,2023-01-15,High,24000000,Growth,SP500,Active
+2,Steady Income Fund,2023-02-01,Low,17500000,Income,AGG,Active
+3,Frontier Tech Fund,2023-03-10,High,12800000,Sector,QQQ,Active
+4,Balanced Portfolio,2023-04-05,Medium,31000000,Balanced,60/40,Active
+5,Green Future Fund,2023-05-20,Medium,9600000,ESG,MSCI_ESG,Active
+6,Small Cap Value Fund,2023-06-12,High,7400000,Value,Russell2000,Active
+7,Global Equity Fund,2023-07-01,Medium,21300000,International,EAFE,Active
+8,Bond Plus Fund,2023-07-25,Low,15200000,Income,BARC_AGG,Active
+9,Dividend Leaders Fund,2023-08-14,Low,13900000,Dividend,SPYD,Active
+10,Emerging Markets Fund,2023-09-02,High,8700000,International,VWO,Active
+11,Broad Market Index Fund,2023-10-01,Medium,40500000,Index,TOTAL_STOCK,Passive
+12,Core Bond Index Fund,2023-10-01,Low,28000000,Index,TOTAL_BOND,Passive
+13,World Index Fund,2023-10-15,Medium,33200000,Index,TOTAL_INTL,Passive

@@ -11,6 +11,11 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 
+# The original assessment dataset is third-party and git-ignored. When it is absent, use the fictional sample.
+HAS_ASSESSMENT_DATA = (ROOT / "data").is_dir() and (ROOT / "database_schema.sql").exists()
+DATA_DIR = ROOT / "data" if HAS_ASSESSMENT_DATA else ROOT / "sample_data"
+SCHEMA_FILE = ROOT / "database_schema.sql" if HAS_ASSESSMENT_DATA else ROOT / "sample_data" / "schema.sql"
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -22,8 +27,8 @@ class Settings:
     llm_hedge_delay_s: float = 2.5
     llm_quota_cooldown_s: float = 300.0  # After a rate-limit failure, skip Gemini for this long.
     db_path: Path = ROOT / "portfolio_database.db"
-    data_dir: Path = ROOT / "data"
-    schema_file: Path = ROOT / "database_schema.sql"
+    data_dir: Path = DATA_DIR
+    schema_file: Path = SCHEMA_FILE
     max_rows: int = 1000
     sql_timeout_s: float = 2.0
     sql_max_vm_steps: int = 5_000_000

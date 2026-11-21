@@ -18,11 +18,18 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: ruff check . && ruff format --check .
       - run: pytest -q
-      - run: python -m portfolio_agent --check-data
+      # The assessment dataset is third-party and not published, so data-dependent checks run only where it exists.
+      - name: Dataset check
+        if: hashFiles('database_schema.sql') != ''
+        run: python -m portfolio_agent --check-data
       # Exercise the actual production planner with Gemini, cache and demo plans disabled.
-      - run: python evaluate.py --local-fallback --min-accuracy 1.0
+      - name: Production fallback evaluation
+        if: hashFiles('database_schema.sql') != ''
+        run: python evaluate.py --local-fallback --min-accuracy 1.0
       # Replays reference plans, so it checks the tool/guard/scorer pipeline, not planner accuracy.
-      - run: python evaluate.py --self-test --extended --min-accuracy 1.0
+      - name: Reference-plan replay
+        if: hashFiles('database_schema.sql') != ''
+        run: python evaluate.py --self-test --extended --min-accuracy 1.0
 
   image:
     runs-on: ubuntu-latest

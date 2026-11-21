@@ -9,8 +9,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY portfolio_agent portfolio_agent
-COPY data data
-COPY database_schema.sql streamlit_app.py ./
+COPY sample_data sample_data
+COPY streamlit_app.py ./
 COPY .streamlit .streamlit
 COPY static static
 COPY reports reports

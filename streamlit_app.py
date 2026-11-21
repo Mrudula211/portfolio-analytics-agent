@@ -254,4 +254,4 @@ with query_tab:
 with evaluation_tab:
     show_evaluation(load_report())
 
-st.caption("Sample dataset. Not investment advice. An independent assessment project, not a PL Capital product.")
+st.caption("Sample dataset. Not investment advice. A personal project, not a commercial product.")

@@ -1,0 +1,7 @@
+benchmark_id,benchmark_name,benchmark_symbol,benchmark_type,description,inception_date
+1,S&P 500 Index,SP500,Equity,Large-cap US equity benchmark,1957-03-04
+2,Bloomberg Aggregate Bond Index,AGG,Fixed Income,US investment grade bond benchmark,1976-01-01
+3,Nasdaq 100 Index,QQQ,Equity,Large-cap US technology-weighted benchmark,1985-01-31
+4,60/40 Blend,60/40,Blended,"60% equity, 40% bonds",2000-01-01
+5,MSCI ESG Leaders,MSCI_ESG,Equity,Sustainability-screened equity benchmark,2010-05-01
+6,Russell 2000 Index,Russell2000,Equity,US small-cap benchmark,1984-12-31

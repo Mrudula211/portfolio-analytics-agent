@@ -8,7 +8,7 @@ gatherUsageStats = false
 [client]
 toolbarMode = "minimal"
 
-# Colours follow plindia.com; Figtree is the site's typeface, self-hosted under the SIL OFL.
+# Light theme; Figtree is self-hosted under the SIL OFL.
 [theme]
 base = "light"
 primaryColor = "#1c2db8"

@@ -2,15 +2,18 @@
 
 Ask questions about portfolio data in plain English. The agent writes and safely runs SQL, calculates sector exposures, or combines the two. It never lets the language model state a number: code formats every figure straight from the database.
 
+This project was built for a take-home technical assessment for an AI/ML role at a financial-services firm. The brief asked for a SQL tool, a sector exposure calculator, a command-line agent and an evaluator. I extended it with a deterministic fallback planner, a Streamlit UI and a deployment. The commit history is kept as it happened.
+
+**About the data.** The assessment's dataset, schema and ground-truth answers belong to the company that set the task, so they are **not published in this repository's current files**. The project runs on a fictional sample dataset in [sample_data/](sample_data/) with the same tables and the same data quirks; see [Data](#data). Everything else (the agent, tools, SQL guard, evaluator and tests) is original work.
+
+Typical output (figures illustrative of the format):
+
 ```text
-> Calculate the sector exposure breakdown for international equity
-Sector exposure: International Equity Fund
-sector            exposure_pct  portfolio_weight_pct  market_value_pct  holdings
-Energy            38%           38%                   30.68%            2
-Technology        36%           36%                   47.20%            4
-Automotive        15%           15%                   13.53%            1
-Consumer Staples  11%           11%                   8.60%             1
-Note: Recorded weights and market values disagree by up to 11.2 points; the recorded weights may be stale.
+> Sector exposure of <portfolio name>
+Sector exposure: <portfolio name>
+sector        exposure_pct  portfolio_weight_pct  market_value_pct  holdings
+<sector>      ...           ...                   ...               ...
+Note: Recorded weights and market values disagree by up to N points; the recorded weights may be stale.
 ```
 
 ## At a glance
@@ -27,14 +30,14 @@ Public app: [portfolio-analytics-agent.onrender.com](https://portfolio-analytics
 
 ## Requirements checklist
 
-| Brief item | Where | How to check it |
+| Assessment requirement | Where | How to check it |
 | --- | --- | --- |
 | SQL query tool | `run_sql` in [tools.py](portfolio_agent/tools.py), guarded by [sql_guard.py](portfolio_agent/sql_guard.py) | `python -m portfolio_agent --trace "How many portfolios do we have?"` prints the SQL and 13 |
-| Exposure calculator, bonds excluded | `exposure_calculator` in [tools.py](portfolio_agent/tools.py) | `python -m portfolio_agent "Sector exposure of Conservative Income Fund"` shows 4 bonds excluded |
+| Exposure calculator, bonds excluded | `exposure_calculator` in [tools.py](portfolio_agent/tools.py) | `python -m portfolio_agent "Sector exposure of Balanced Portfolio"` shows the bonds excluded |
 | Command-line agent that chooses a tool | [agent.py](portfolio_agent/agent.py) | `--trace` shows the tool chosen |
 | Evaluator against the ground truth | [evaluate.py](evaluate.py), [evaluation.py](portfolio_agent/evaluation.py) | `python evaluate.py`, or `--self-test` without an API key |
 | Brief documentation and a diagram | This page and [docs/](docs/) | Diagram below |
-| Clean code with error handling | 303 tests, Ruff lint and formatting, CI on every push | `pytest` |
+| Clean code with error handling | 306 tests, Ruff lint and formatting, CI on every push | `pytest` |
 
 **Optional enhancements:**
 - **SQL safety:** parameterised queries, validation before execution and graceful database errors.
@@ -52,14 +55,14 @@ python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt
 export GEMINI_API_KEY=your-key   # optional; PowerShell: $env:GEMINI_API_KEY="your-key"
-python -m portfolio_agent "How many portfolios do we have in total?"
+python -m portfolio_agent "[assessment question Q1]"
 ```
 
 | Task | Command |
 | --- | --- |
 | Interactive prompt | `python -m portfolio_agent` |
 | Show SQL, route and timings | add `--trace` |
-| Evaluate: brief's 10, or all 40 | `python evaluate.py`, add `--extended` |
+| Evaluate: the 10 provided questions, or all 40 | `python evaluate.py`, add `--extended` |
 | Production deterministic fallback, no key/network | `python evaluate.py --local-fallback --min-accuracy 1.0` |
 | Replay reference plans, no key needed (not planner accuracy) | `python evaluate.py --self-test --extended --min-accuracy 1.0` |
 | Web UI | `streamlit run streamlit_app.py`, then open http://localhost:8501 |
@@ -67,6 +70,13 @@ python -m portfolio_agent "How many portfolios do we have in total?"
 | Tests and data audit | `pytest` and `python -m portfolio_agent --check-data` |
 
 The database is built from the CSVs on the first run.
+
+### Data
+
+The agent runs on the fictional dataset in [sample_data/](sample_data/): 13 funds, 24 stocks, 6 bonds, and invented names and numbers throughout. [scripts/make_sample_data.py](scripts/make_sample_data.py) regenerates it. It keeps the quirks the agent handles: recorded weights that sum to 98%, bond-only funds, performance data for only four funds, and `total_aum` far above the value of the listed holdings.
+
+The original assessment files are third-party and git-ignored. If you have a dataset in the same schema, put the CSVs in `data/`, the schema in `database_schema.sql` and the reference answers in `ground_truth_dataset.json`; the app then uses them instead. `python evaluate.py` and the tests that score against reference answers need those answers and are skipped without them. The documented evaluation results below were produced on the original data.
+
 The local planner supports a bounded set of intents and uses the production SQL guard or exposure calculator. Unsupported requests may be handled by Gemini when configured, subject to provider availability, quota, and successful execution; otherwise they are clarified or declined. This is not general NL-to-SQL. The local evaluation disables Gemini, cache and saved demo plans.
 
 Render serves the public Streamlit interface without a login gate. Configure `GEMINI_API_KEY` in the Render dashboard for model questions. A configured API key means the client is set up, not that Gemini is reachable or has quota. The REST API is available when run separately and is not the interface served by the Render Docker command.

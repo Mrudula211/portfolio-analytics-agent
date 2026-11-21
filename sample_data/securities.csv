@@ -1,0 +1,31 @@
+security_id,symbol,company_name,asset_type,sector_id,market_cap,current_price,currency,exchange,country,listing_date,maturity_date,coupon_rate
+1,NWSF,Northwind Software,Stock,1,333000,142.3,USD,NYSE,US,2015-03-15,,
+2,QNTC,Quanta Circuits,Stock,1,406000,88.15,USD,NYSE,US,2005-01-15,,
+3,CLDB,CloudBridge Systems,Stock,1,76000,211.4,USD,NYSE,US,2011-09-15,,
+4,ARCL,Arclight Devices,Stock,1,98000,64.8,USD,NYSE,TW,1996-10-15,,
+5,BRKH,Brookhaven Retail,Stock,2,61000,97.25,USD,NYSE,US,2014-09-15,,
+6,LUMO,Lumo Apparel,Stock,2,221000,45.6,USD,NYSE,GB,1986-02-15,,
+7,VOLT,Voltra Motors,Stock,3,446000,178.9,USD,NYSE,US,1998-02-15,,
+8,AXLE,Axle & Co,Stock,3,248000,52.35,USD,NYSE,DE,1987-09-15,,
+9,MRDN,Meridian Bancorp,Stock,4,436000,73.1,USD,NYSE,US,1986-10-15,,
+10,CRST,Crestline Insurance,Stock,4,128000,121.45,USD,NYSE,US,2015-04-15,,
+11,HLXC,Helix Care,Stock,5,647000,156.7,USD,NYSE,US,2005-10-15,,
+12,PNCL,Pinnacle Biologics,Stock,5,65000,94.2,USD,NYSE,CH,2003-10-15,,
+13,DAWN,Dawnfield Foods,Stock,6,408000,68.55,USD,NYSE,US,1986-04-15,,
+14,HRTH,Hearth & Home,Stock,6,49000,39.9,USD,NYSE,US,2002-03-15,,
+15,SOLR,Solaris Energy,Stock,7,298000,58.4,USD,NYSE,US,1998-03-15,,
+16,TIDE,Tidewater Oil,Stock,7,555000,82.65,USD,NYSE,NO,1988-10-15,,
+17,FRGE,Forge Industries,Stock,8,317000,133.25,USD,NYSE,US,2002-11-15,,
+18,SKYL,Skyline Aerospace,Stock,8,187000,201.8,USD,NYSE,FR,1988-10-15,,
+19,BLDR,Builder Realty Trust,Stock,9,586000,47.3,USD,NYSE,US,2005-04-15,,
+20,GRID,GridOne Utilities,Stock,10,383000,61.15,USD,NYSE,US,1988-09-15,,
+21,ASIA,AsiaPac Holdings,Stock,4,731000,33.75,USD,NYSE,HK,1987-10-15,,
+22,ORBT,Orbit Mobility,Stock,3,63000,27.6,USD,NYSE,KR,2004-04-15,,
+23,MNTA,Montana Minerals,Stock,7,510000,41.05,USD,NYSE,CA,2006-09-15,,
+24,ZENI,Zenith Instruments,Stock,5,439000,109.9,USD,NYSE,JP,2009-06-15,,
+25,GB10,Government Note 10Y,Bond,,,98.4,USD,OTC,US,2019-01-01,2034-05-15,4.25
+26,GB05,Government Note 5Y,Bond,,,99.1,USD,OTC,US,2019-01-01,2029-05-15,3.8
+27,CB07,Corporate Bond 7Y,Bond,,,101.25,USD,OTC,US,2019-01-01,2031-09-01,5.1
+28,CB03,Corporate Bond 3Y,Bond,,,99.75,USD,OTC,US,2019-01-01,2027-03-01,4.6
+29,MB12,Municipal Bond 12Y,Bond,,,97.6,USD,OTC,US,2019-01-01,2036-06-30,3.95
+30,HY05,High Yield Bond 5Y,Bond,,,94.85,USD,OTC,US,2019-01-01,2029-11-15,7.2

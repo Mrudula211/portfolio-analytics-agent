@@ -16,3 +16,9 @@ reports/self_test*
 *.log
 .DS_Store
 Thumbs.db
+
+# Third-party assessment data: kept locally, never published
+data/
+database_schema.sql
+ground_truth_dataset.json
+reports/ground_truth_audit.md

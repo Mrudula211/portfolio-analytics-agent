@@ -1,0 +1,11 @@
+sector_id,sector_name,sector_description,industry_group
+1,Technology,"Software, hardware and IT services",Tech
+2,Consumer Discretionary,Non-essential consumer goods and services,Consumer
+3,Automotive,Vehicle makers and suppliers,Industrial
+4,Financials,"Banks, insurers and asset managers",Finance
+5,Healthcare,"Pharmaceuticals, devices and care providers",Health
+6,Consumer Staples,Everyday essentials,Consumer
+7,Energy,"Oil, gas and renewables",Energy
+8,Industrials,"Machinery, aerospace and logistics",Industrial
+9,Real Estate,Property owners and developers,Property
+10,Utilities,"Power, water and gas networks",Utilities

@@ -37,16 +37,16 @@
 
 | ID | Verdict | Route | ms | Question | Detail |
 | --- | --- | --- | --- | --- | --- |
-| gt01 | exact | gemini | 6.1 | How many portfolios do we have in total? |  |
-| gt02 | exact | gemini | 3.5 | What are the names of all active portfolios? |  |
-| gt03 | exact | gemini | 3.4 | Which securities are in the Technology sector? |  |
-| gt04 | exact | gemini | 6.7 | What is the total Assets Under Management (AUM) for portfolios with high target risk level? |  |
-| gt05 | exact | gemini | 5.4 | Show me the top 5 holdings by cost basis in the Growth Equity Fund |  |
-| gt06 | exact | gemini | 5.1 | What is the average current price of securities in each sector? |  |
-| gt07 | exact | gemini | 10.3 | For each portfolio, show the total value of Technology sector holdings and what percentage it represents of the total portfolio value |  |
-| gt08 | exact | gemini | 13.9 | Find portfolios that have holdings in more than 5 different sectors and show their diversification metrics |  |
-| gt09 | exact | direct_calculator | 4.9 | What are the sector exposures for the Tech Innovation Fund? |  |
-| gt10 | exact | direct_calculator | 5.1 | Calculate the sector exposure breakdown for international equity |  |
+| gt01 | exact | gemini | 6.1 | [assessment question Q1] |  |
+| gt02 | exact | gemini | 3.5 | [assessment question Q2] |  |
+| gt03 | exact | gemini | 3.4 | [assessment question Q3] |  |
+| gt04 | exact | gemini | 6.7 | [assessment question Q4] |  |
+| gt05 | exact | gemini | 5.4 | [assessment question Q5] |  |
+| gt06 | exact | gemini | 5.1 | [assessment question Q6] |  |
+| gt07 | exact | gemini | 10.3 | [assessment question Q7] |  |
+| gt08 | exact | gemini | 13.9 | [assessment question Q8] |  |
+| gt09 | exact | direct_calculator | 4.9 | [assessment question Q9] |  |
+| gt10 | exact | direct_calculator | 5.1 | [assessment question Q10] |  |
 | x01 | exact | gemini | 3.2 | What's the number of funds on our books? |  |
 | x02 | exact | gemini | 1.8 | Which funds are run passively? |  |
 | x03 | exact | gemini | 5.0 | How much money in total is managed across low risk funds? |  |

@@ -83,7 +83,7 @@ The UI is laid out as a workspace rather than a landing page:
 - **Query tab:** the answer appears above the fold. It shows the route taken and the time, then tables, exposure charts with tooltips, and the SQL behind each answer.
 - **Evaluation tab:** the live results, by category and for every question.
 
-Colours follow plindia.com, and its Figtree typeface is self-hosted. Text from users or the database is escaped before display, so it can never be interpreted as Markdown or HTML.
+The UI uses a light theme with the Figtree typeface, which is self-hosted. Text from users or the database is escaped before display, so it can never be interpreted as Markdown or HTML.
 
 **The trade-offs:**
 - Streamlit re-runs the script on every interaction. The agent and dataset facts are cached, so a re-run is cheap.
@@ -137,7 +137,7 @@ Model-written SQL is treated as untrusted:
 ```bash
 curl -X POST http://127.0.0.1:8000/api/ask \
   -H "Content-Type: application/json" \
-  -d '{"question":"What are the sector exposures for the Tech Innovation Fund?"}'
+  -d '{"question":"[assessment question Q9]"}'
 ```
 
 The response includes `status`, `answer`, `route`, `steps` (SQL, rows, exposures), `warnings`, `timings_ms` and `llm`. Also available: `GET /api/health` and `GET /docs`. Run it with `uvicorn portfolio_agent.api:app`.
