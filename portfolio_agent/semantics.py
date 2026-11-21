@@ -260,16 +260,17 @@ def validate_result(question: str, result: QueryResult, db_path: Path) -> str | 
         missing = [column for column, index in indices.items() if index is None]
         if missing:
             return "The query output is missing required columns: " + ", ".join(missing) + "."
+        position = {column: index for column, index in indices.items() if index is not None}
         expected = _independent_diversification(db_path, sector_threshold(question))
-        name_i = indices["portfolio_name"]
+        name_i = position["portfolio_name"]
         actual = {}
         try:
             for row in result.rows:
                 name = str(row[name_i])
                 actual[name] = (
-                    int(row[indices["sector_count"]]),
-                    int(row[indices["total_holdings"]]),
-                    float(row[indices["diversification_ratio"]]),
+                    int(row[position["sector_count"]]),
+                    int(row[position["total_holdings"]]),
+                    float(row[position["diversification_ratio"]]),
                 )
         except (TypeError, ValueError, IndexError):
             return "The required diversification metric columns must contain numeric values."

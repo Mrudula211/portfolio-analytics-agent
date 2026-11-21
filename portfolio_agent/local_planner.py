@@ -221,7 +221,7 @@ class LocalPlanner:
 
     def _filters(self, text: str) -> list[str]:
         conditions = []
-        status = self._status_re.search(text) if self._status_re else None
+        status = self._status_re.search(text) if isinstance(self._status_re, re.Pattern) else None
         if status:
             canonical = next(v for v in self.vocabulary.status if v.lower() == status.group(1))
             conditions.append(f"status = {_literal(canonical)}")

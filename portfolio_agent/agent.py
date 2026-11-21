@@ -23,6 +23,7 @@ import time
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
+from typing import Any
 
 from .cache import AnswerCache, normalize_question
 from .config import Settings
@@ -125,8 +126,12 @@ class PortfolioAgent:
         self._system = build_system_prompt(self.catalog.render())
         self.llm = llm if llm is not None else self._default_llm()
         self.planner = LocalPlanner(self.settings.db_path)
-        self._gemini = {"state": "configured" if self.llm else "not_configured", "detail": "", "blocked_until": 0.0}
-        self._budget = {"day": None, "used": 0}
+        self._gemini: dict[str, Any] = {
+            "state": "configured" if self.llm else "not_configured",
+            "detail": "",
+            "blocked_until": 0.0,
+        }
+        self._budget: dict[str, Any] = {"day": None, "used": 0}
         self._budget_lock = threading.Lock()
 
     def _default_llm(self) -> LLMClient | None:
@@ -379,7 +384,7 @@ class PortfolioAgent:
     def _answer_with_calls(self, question: str, links: Links, plan: LLMResponse, *, route: str) -> AgentResponse:
         reply = AgentResponse(question, STATUS_OK, "", route)
         llm_ms = plan.latency_ms
-        usage = {"calls": 0 if route in NO_MODEL_ROUTES else 1, "model": plan.model}
+        usage: dict[str, Any] = {"calls": 0 if route in NO_MODEL_ROUTES else 1, "model": plan.model}
         usage.update(prompt_tokens=plan.prompt_tokens, output_tokens=plan.output_tokens)
         sections: list[str] = []
         previous: QueryResult | None = None

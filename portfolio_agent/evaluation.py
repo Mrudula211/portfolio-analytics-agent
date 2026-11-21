@@ -267,7 +267,7 @@ def _exposure_steps(reply: AgentResponse) -> list[Step]:
 
 def _check_exposures(case: Case, reply: AgentResponse, oracle: ExposureOracle) -> tuple[str, str]:
     steps = _exposure_steps(reply)
-    got = {s.exposure["portfolio_name"]: s.exposure for s in steps}
+    got = {e["portfolio_name"]: e for e in (s.exposure for s in steps) if e is not None}
     if set(got) != set(case.portfolios):
         return FAIL, f"portfolios {sorted(got)} != {sorted(case.portfolios)}"
     for name in case.portfolios:
@@ -328,7 +328,7 @@ class Evaluator:
             if selection_verdict not in _PASSING:
                 return FAIL, f"hybrid SQL selection failed: {selection_detail}", False
             selected_names = {str(row[0]) for row in (sql_steps[0].rows or []) if row and row[0] is not None}
-            exposure_names = {step.exposure["portfolio_name"] for step in exposure_steps}
+            exposure_names = {step.exposure["portfolio_name"] for step in exposure_steps if step.exposure}
             if len(exposure_names) != len(exposure_steps) or selected_names != exposure_names:
                 return (
                     FAIL,
@@ -338,13 +338,14 @@ class Evaluator:
             for step in exposure_steps:  # What was passed in must be what the result describes.
                 asked = str(step.input.get("portfolio_name", ""))
                 resolved, _ = self.agent.linker.resolve(asked)
-                if resolved != step.exposure["portfolio_name"]:
+                owner = (step.exposure or {}).get("portfolio_name")
+                if resolved != owner:
                     detail = f"calculator input {asked!r} resolved to {resolved!r}"
-                    return FAIL, f"{detail}, but the result belongs to {step.exposure['portfolio_name']!r}", False
+                    return FAIL, f"{detail}, but the result belongs to {owner!r}", False
             verdict, detail = _check_exposures(case, reply, self.oracle)
             return verdict, detail, used == {"run_sql", "exposure_calculator"}
         steps = _sql_steps(reply)
-        if not steps or used != {"run_sql"}:
+        if not steps or used != {"run_sql"} or case.sql is None:
             return FAIL, f"expected run_sql, used {sorted(used)}", False
         reference = execute_select(self.db, case.sql)
         ordered = _reference_is_ordered(case.sql)

@@ -8,7 +8,7 @@ import time
 from collections import Counter
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 
 from google import genai
 from google.genai import types
@@ -31,7 +31,7 @@ def _failure_category(error: Exception) -> str:
     if isinstance(error, (TimeoutError, socket.timeout)) or "timeout" in type(error).__name__.casefold():
         return "timeout"
     response = getattr(error, "response", None)
-    status = getattr(error, "status_code", None) or getattr(error, "code", None)
+    status: Any = getattr(error, "status_code", None) or getattr(error, "code", None)
     if status is None and response is not None:
         status = getattr(response, "status_code", None)
     try:
@@ -66,7 +66,7 @@ class LLMClient(Protocol):
     def plan(self, system: str, prompt: str) -> LLMResponse: ...
 
 
-TOOL_DECLARATIONS = [
+TOOL_DECLARATIONS: list[dict[str, Any]] = [
     {
         "name": "run_sql",
         "description": "Run one read-only SQLite SELECT against the portfolio database.",
@@ -137,7 +137,7 @@ class GeminiClient:
                 retry_options=types.HttpRetryOptions(attempts=1),
             ),
         )
-        self._tools = [
+        self._tools: list[Any] = [
             types.Tool(
                 function_declarations=[
                     types.FunctionDeclaration(
@@ -168,7 +168,7 @@ class GeminiClient:
                 thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.MINIMAL),
             ),
         )
-        calls = [ToolCall(c.name, dict(c.args or {})) for c in (response.function_calls or [])]
+        calls = [ToolCall(c.name or "", dict(c.args or {})) for c in (response.function_calls or [])]
         if not calls:
             raise LLMError("Model returned no tool call.")
         usage = response.usage_metadata

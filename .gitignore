@@ -22,3 +22,6 @@ data/
 database_schema.sql
 ground_truth_dataset.json
 reports/ground_truth_audit.md
+.coverage
+htmlcov/
+.mypy_cache/

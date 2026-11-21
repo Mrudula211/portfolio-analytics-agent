@@ -37,7 +37,7 @@ Public app: [portfolio-analytics-agent.onrender.com](https://portfolio-analytics
 | Command-line agent that chooses a tool | [agent.py](portfolio_agent/agent.py) | `--trace` shows the tool chosen |
 | Evaluator against the ground truth | [evaluate.py](evaluate.py), [evaluation.py](portfolio_agent/evaluation.py) | `python evaluate.py`, or `--self-test` without an API key |
 | Brief documentation and a diagram | This page and [docs/](docs/) | Diagram below |
-| Clean code with error handling | 306 tests, Ruff lint and formatting, CI on every push | `pytest` |
+| Clean code with error handling | 312 tests, Ruff lint and formatting, CI on every push | `pytest` |
 
 **Optional enhancements:**
 - **SQL safety:** parameterised queries, validation before execution and graceful database errors.

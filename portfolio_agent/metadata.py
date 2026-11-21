@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -82,7 +83,7 @@ class EntityLinker:
         self,
         portfolio_names: list[str],
         sector_names: list[str],
-        securities: list[tuple[str, str]] = (),
+        securities: Sequence[tuple[str, str]] = (),
         typo_cutoff: float = 0.88,
     ):
         self._securities: dict[str, str] = {}
